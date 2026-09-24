@@ -2,7 +2,15 @@
 <html lang="pl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#2563eb">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Nadgodziny">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <title>Kalkulator nadgodzin</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -13,88 +21,147 @@
     <p class="subtitle">Pon–pt, powyżej 8h dziennie = nadgodziny. Nadgodziny nie są płatne, ale można je wykorzystać jako urlop.</p>
   </header>
 
-  <section class="summary" id="summary">
-    <div class="summary-card">
-      <span class="summary-label">Wypracowane nadgodziny</span>
-      <span class="summary-value" id="sumOvertimeEarned">0.00 h</span>
-    </div>
-    <div class="summary-card">
-      <span class="summary-label">Wykorzystane jako urlop</span>
-      <span class="summary-value" id="sumOvertimeUsed">0.00 h</span>
-    </div>
-    <div class="summary-card highlight">
-      <span class="summary-label">Dostępne saldo</span>
-      <span class="summary-value" id="sumBalance">0.00 h</span>
-      <span class="summary-sub" id="sumBalanceDays"></span>
-    </div>
+  <nav class="tabs" id="tabs">
+    <button class="tab-btn active" data-tab="entries">Wpisy</button>
+    <button class="tab-btn" data-tab="report">Raport PDF</button>
+  </nav>
+
+  <section class="tab-panel" id="panel-entries">
+
+    <section class="summary" id="summary">
+      <div class="summary-card">
+        <span class="summary-label">Wypracowane nadgodziny</span>
+        <span class="summary-value" id="sumOvertimeEarned">0.00 h</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Wykorzystane jako urlop</span>
+        <span class="summary-value" id="sumOvertimeUsed">0.00 h</span>
+      </div>
+      <div class="summary-card highlight">
+        <span class="summary-label">Dostępne saldo</span>
+        <span class="summary-value" id="sumBalance">0.00 h</span>
+        <span class="summary-sub" id="sumBalanceDays"></span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Delegacje</span>
+        <span class="summary-value" id="sumTripDays">0 dni</span>
+        <span class="summary-sub" id="sumTripAllowance">0.00 zł diety</span>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <h2>Dodaj wpis</h2>
+      <form id="entryForm">
+        <div class="form-row">
+          <label for="type">Typ wpisu</label>
+          <select id="type">
+            <option value="work">Przepracowany dzień</option>
+            <option value="leave">Wykorzystanie nadgodzin jako urlop</option>
+            <option value="trip">Delegacja (podróż służbowa)</option>
+          </select>
+        </div>
+
+        <div class="form-row" id="dateRow">
+          <label for="date" id="dateLabel">Data</label>
+          <input type="date" id="date" required>
+        </div>
+
+        <div class="form-row" id="endDateRow" style="display:none;">
+          <label for="endDate">Data zakończenia</label>
+          <input type="date" id="endDate">
+        </div>
+
+        <div class="form-row" id="hoursWorkedRow">
+          <label for="hoursWorked">Godziny przepracowane</label>
+          <input type="number" id="hoursWorked" step="0.25" min="0" max="24" placeholder="np. 9.5">
+        </div>
+
+        <div class="form-row" id="hoursLeaveRow" style="display:none;">
+          <label for="hoursLeave">Godziny urlopu (z nadgodzin)</label>
+          <input type="number" id="hoursLeave" step="0.25" min="0" max="24" placeholder="np. 8">
+        </div>
+
+        <div class="form-row" id="destinationRow" style="display:none;">
+          <label for="destination">Cel podróży / miejsce</label>
+          <input type="text" id="destination" placeholder="np. Warszawa - klient XYZ">
+        </div>
+
+        <div class="form-row" id="allowanceRow" style="display:none;">
+          <label for="dailyAllowance">Dieta dzienna (zł)</label>
+          <input type="number" id="dailyAllowance" step="0.01" min="0" placeholder="np. 45">
+        </div>
+
+        <div class="form-row">
+          <label for="note">Notatka (opcjonalnie)</label>
+          <input type="text" id="note" placeholder="np. wyjście wcześniej w piątek">
+        </div>
+
+        <button type="submit">Dodaj wpis</button>
+      </form>
+    </section>
+
+    <section class="entries-section">
+      <div class="entries-header">
+        <h2>Wpisy</h2>
+        <select id="monthFilter"></select>
+      </div>
+      <div id="entriesList" class="entries-list"></div>
+      <p id="emptyState" class="empty-state" style="display:none;">Brak wpisów. Dodaj pierwszy dzień pracy powyżej.</p>
+    </section>
+
+    <footer>
+      <button id="exportBtn" class="secondary">Eksportuj dane (JSON)</button>
+      <label class="secondary import-label">
+        Importuj dane (JSON)
+        <input type="file" id="importInput" accept="application/json" hidden>
+      </label>
+    </footer>
   </section>
 
-  <section class="form-section">
-    <h2>Dodaj wpis</h2>
-    <form id="entryForm">
+  <section class="tab-panel" id="panel-report" style="display:none;">
+    <section class="form-section">
+      <h2>Zakres raportu</h2>
+      <div class="quick-ranges">
+        <button type="button" class="chip" data-range="thisMonth">Ten miesiąc</button>
+        <button type="button" class="chip" data-range="prevMonth">Poprzedni miesiąc</button>
+        <button type="button" class="chip" data-range="thisYear">Ten rok</button>
+      </div>
       <div class="form-row">
-        <label for="date">Data</label>
-        <input type="date" id="date" required>
+        <label for="reportFrom">Od</label>
+        <input type="date" id="reportFrom">
       </div>
-
       <div class="form-row">
-        <label for="type">Typ wpisu</label>
-        <select id="type">
-          <option value="work">Przepracowany dzień</option>
-          <option value="leave">Wykorzystanie nadgodzin jako urlop</option>
-        </select>
+        <label for="reportTo">Do</label>
+        <input type="date" id="reportTo">
       </div>
+      <button id="generatePdfBtn">Generuj PDF</button>
+    </section>
 
-      <div class="form-row" id="hoursWorkedRow">
-        <label for="hoursWorked">Godziny przepracowane</label>
-        <input type="number" id="hoursWorked" step="0.25" min="0" max="24" placeholder="np. 9.5">
+    <section class="summary" id="reportSummary">
+      <div class="summary-card">
+        <span class="summary-label">Nadgodziny wypracowane</span>
+        <span class="summary-value" id="repOvertimeEarned">0.00 h</span>
       </div>
-
-      <div class="form-row" id="hoursLeaveRow" style="display:none;">
-        <label for="hoursLeave">Godziny urlopu (z nadgodzin)</label>
-        <input type="number" id="hoursLeave" step="0.25" min="0" max="24" placeholder="np. 8">
+      <div class="summary-card">
+        <span class="summary-label">Wykorzystane jako urlop</span>
+        <span class="summary-value" id="repOvertimeUsed">0.00 h</span>
       </div>
-
-      <div class="form-row">
-        <label for="note">Notatka (opcjonalnie)</label>
-        <input type="text" id="note" placeholder="np. wyjście wcześniej w piątek">
+      <div class="summary-card highlight">
+        <span class="summary-label">Saldo w zakresie</span>
+        <span class="summary-value" id="repBalance">0.00 h</span>
       </div>
-
-      <button type="submit">Dodaj wpis</button>
-    </form>
+      <div class="summary-card">
+        <span class="summary-label">Delegacje</span>
+        <span class="summary-value" id="repTripDays">0 dni</span>
+        <span class="summary-sub" id="repTripAllowance">0.00 zł diety</span>
+      </div>
+    </section>
   </section>
 
-  <section class="entries-section">
-    <div class="entries-header">
-      <h2>Wpisy</h2>
-      <select id="monthFilter"></select>
-    </div>
-    <table id="entriesTable">
-      <thead>
-        <tr>
-          <th>Data</th>
-          <th>Dzień</th>
-          <th>Typ</th>
-          <th>Godziny</th>
-          <th>Standard</th>
-          <th>Nadgodziny</th>
-          <th>Notatka</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="entriesBody"></tbody>
-    </table>
-    <p id="emptyState" class="empty-state" style="display:none;">Brak wpisów. Dodaj pierwszy dzień pracy powyżej.</p>
-  </section>
-
-  <footer>
-    <button id="exportBtn" class="secondary">Eksportuj dane (JSON)</button>
-    <label class="secondary import-label">
-      Importuj dane (JSON)
-      <input type="file" id="importInput" accept="application/json" hidden>
-    </label>
-  </footer>
 </div>
+<script src="js/vendor/jspdf.umd.min.js"></script>
+<script src="js/vendor/pdf-fonts.js"></script>
+<script src="js/pdf.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
