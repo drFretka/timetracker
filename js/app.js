@@ -43,6 +43,23 @@ function entryEndDate(entry) {
   return entry.type === 'trip' ? (entry.endDate || entry.date) : entry.date;
 }
 
+// Hours worked between two "HH:MM" times. Crossing midnight (end <= start) is
+// treated as a night shift ending the next day.
+function hoursBetween(startTime, endTime, breakMinutes) {
+  const [sh, sm] = startTime.split(':').map(Number);
+  const [eh, em] = endTime.split(':').map(Number);
+  let minutes = (eh * 60 + em) - (sh * 60 + sm);
+  if (minutes <= 0) minutes += 24 * 60;
+  minutes -= breakMinutes || 0;
+  return Math.max(0, minutes) / 60;
+}
+
+function formatTimeRange(entry) {
+  let label = `${entry.startTime}–${entry.endTime}`;
+  if (entry.breakMinutes) label += ` (przerwa ${entry.breakMinutes} min)`;
+  return label;
+}
+
 // Returns { standard, overtime, tripDays, tripAllowance } for one entry.
 function computeEntry(entry) {
   if (entry.type === 'leave') {
@@ -119,20 +136,42 @@ document.getElementById('tabs').addEventListener('click', (e) => {
 const typeSelect = document.getElementById('type');
 const dateLabel = document.getElementById('dateLabel');
 const endDateRow = document.getElementById('endDateRow');
-const hoursWorkedRow = document.getElementById('hoursWorkedRow');
+const workTimeRow = document.getElementById('workTimeRow');
+const breakRow = document.getElementById('breakRow');
+const computedHoursEl = document.getElementById('computedHours');
 const hoursLeaveRow = document.getElementById('hoursLeaveRow');
 const destinationRow = document.getElementById('destinationRow');
 const allowanceRow = document.getElementById('allowanceRow');
+const startTimeInput = document.getElementById('startTime');
+const endTimeInput = document.getElementById('endTime');
+const breakMinutesInput = document.getElementById('breakMinutes');
 
 function updateFormFields() {
   const type = typeSelect.value;
-  hoursWorkedRow.style.display = type === 'work' ? 'flex' : 'none';
+  workTimeRow.style.display = type === 'work' ? 'flex' : 'none';
+  breakRow.style.display = type === 'work' ? 'flex' : 'none';
   hoursLeaveRow.style.display = type === 'leave' ? 'flex' : 'none';
   endDateRow.style.display = type === 'trip' ? 'flex' : 'none';
   destinationRow.style.display = type === 'trip' ? 'flex' : 'none';
   allowanceRow.style.display = type === 'trip' ? 'flex' : 'none';
   dateLabel.textContent = type === 'trip' ? 'Data rozpoczęcia' : 'Data';
+  updateComputedHoursPreview();
 }
+
+function updateComputedHoursPreview() {
+  if (typeSelect.value !== 'work' || !startTimeInput.value || !endTimeInput.value) {
+    computedHoursEl.style.display = 'none';
+    return;
+  }
+  const breakMinutes = parseFloat(breakMinutesInput.value) || 0;
+  const hours = hoursBetween(startTimeInput.value, endTimeInput.value, breakMinutes);
+  computedHoursEl.textContent = `Przepracowane: ${hours.toFixed(2)} h`;
+  computedHoursEl.style.display = 'block';
+}
+
+[startTimeInput, endTimeInput, breakMinutesInput].forEach((input) => {
+  input.addEventListener('input', updateComputedHoursPreview);
+});
 
 typeSelect.addEventListener('change', updateFormFields);
 updateFormFields();
@@ -148,8 +187,13 @@ document.getElementById('entryForm').addEventListener('submit', (e) => {
   const entry = { id: Date.now(), type, date, note };
 
   if (type === 'work') {
-    const hours = parseFloat(document.getElementById('hoursWorked').value);
-    if (isNaN(hours) || hours <= 0) { alert('Podaj poprawną liczbę godzin.'); return; }
+    if (!startTimeInput.value || !endTimeInput.value) { alert('Podaj godzinę rozpoczęcia i zakończenia.'); return; }
+    const breakMinutes = parseFloat(breakMinutesInput.value) || 0;
+    const hours = hoursBetween(startTimeInput.value, endTimeInput.value, breakMinutes);
+    if (hours <= 0) { alert('Godzina zakończenia musi być inna niż rozpoczęcia.'); return; }
+    entry.startTime = startTimeInput.value;
+    entry.endTime = endTimeInput.value;
+    entry.breakMinutes = breakMinutes;
     entry.hours = hours;
   } else if (type === 'leave') {
     const hours = parseFloat(document.getElementById('hoursLeave').value);
@@ -211,7 +255,8 @@ function entryDetailHtml(entry) {
   const overtimeHtml = r.overtime > 0
     ? `<span class="overtime-cell">+${r.overtime.toFixed(2)} h nadgodzin</span>`
     : 'brak nadgodzin';
-  return `${formatHours(entry.hours)} — standard ${r.standard.toFixed(2)} h, ${overtimeHtml}`;
+  const timeRange = entry.startTime && entry.endTime ? `${formatTimeRange(entry)} · ` : '';
+  return `${timeRange}${formatHours(entry.hours)} — standard ${r.standard.toFixed(2)} h, ${overtimeHtml}`;
 }
 
 function typeBadge(type) {

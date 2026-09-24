@@ -134,7 +134,7 @@ function generatePdfReport(scopedEntries, from, to) {
         entry.type === 'leave' ? '–' : entry.hours.toFixed(2),
         entry.type === 'leave' ? '–' : r.standard.toFixed(2),
         entry.type === 'leave' ? `-${entry.hours.toFixed(2)}` : (r.overtime > 0 ? `+${r.overtime.toFixed(2)}` : '–'),
-        entry.note || '',
+        [entry.startTime && entry.endTime ? formatTimeRange(entry) : '', entry.note || ''].filter(Boolean).join(' · '),
       ];
     });
     y = pdfDrawTable(doc, y, columns, rows);

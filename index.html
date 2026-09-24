@@ -71,10 +71,23 @@
           <input type="date" id="endDate">
         </div>
 
-        <div class="form-row" id="hoursWorkedRow">
-          <label for="hoursWorked">Godziny przepracowane</label>
-          <input type="number" id="hoursWorked" step="0.25" min="0" max="24" placeholder="np. 9.5">
+        <div class="form-row time-row" id="workTimeRow">
+          <div class="time-field">
+            <label for="startTime">Rozpoczęcie</label>
+            <input type="time" id="startTime">
+          </div>
+          <div class="time-field">
+            <label for="endTime">Zakończenie</label>
+            <input type="time" id="endTime">
+          </div>
         </div>
+
+        <div class="form-row" id="breakRow">
+          <label for="breakMinutes">Przerwa (minuty, opcjonalnie)</label>
+          <input type="number" id="breakMinutes" step="5" min="0" max="600" placeholder="np. 30">
+        </div>
+
+        <p class="computed-hours" id="computedHours" style="display:none;"></p>
 
         <div class="form-row" id="hoursLeaveRow" style="display:none;">
           <label for="hoursLeave">Godziny urlopu (z nadgodzin)</label>
