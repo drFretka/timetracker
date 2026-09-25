@@ -71,7 +71,10 @@ function pdfDrawTable(doc, startY, columns, rows) {
 
     let x = PDF_MARGIN;
     for (let i = 0; i < columns.length; i++) {
-      doc.text(wrapped[i], x + cellPad, y + 4, { maxWidth: columns[i].width - cellPad * 2 });
+      // wrapped[i] is already line-broken to fit the column (splitTextToSize
+      // above); passing maxWidth here too made jsPDF re-wrap each already-
+      // wrapped line and silently drop content that didn't fit again.
+      doc.text(wrapped[i], x + cellPad, y + 4);
       x += columns[i].width;
     }
     y += rowHeight;
@@ -85,6 +88,27 @@ function pdfDrawTable(doc, startY, columns, rows) {
 function pdfFormatDate(iso) {
   const [y, m, d] = iso.split('-');
   return `${d}.${m}.${y}`;
+}
+
+// Nominatim addresses are long ("ulica, dzielnica, miasto, województwo, kod,
+// kraj") — keep only the first couple of parts so the PDF table stays readable.
+function shortAddress(address, maxParts) {
+  if (!address) return '';
+  return address.split(',').slice(0, maxParts).join(',').trim();
+}
+
+function locationTextForPdf(entry) {
+  const parts = [];
+  if (entry.startCoords) {
+    const label = entry.type === 'trip' ? 'Start' : 'Miejsce';
+    const text = entry.startAddress ? shortAddress(entry.startAddress, 2) : `${entry.startCoords.lat.toFixed(5)}, ${entry.startCoords.lon.toFixed(5)}`;
+    parts.push(`${label}: ${text}`);
+  }
+  if (entry.endCoords) {
+    const text = entry.endAddress ? shortAddress(entry.endAddress, 2) : `${entry.endCoords.lat.toFixed(5)}, ${entry.endCoords.lon.toFixed(5)}`;
+    parts.push(`Koniec: ${text}`);
+  }
+  return parts.join(' | ');
 }
 
 function generatePdfReport(scopedEntries, from, to) {
@@ -132,7 +156,7 @@ function generatePdfReport(scopedEntries, from, to) {
         : `${pdfFormatDate(entry.date)}–${pdfFormatDate(entryEndDate(entry))}`;
       const locTag = entry.type === 'work' && entry.location === 'trip' ? '[Delegacja] ' : '';
       const timeRange = entry.startTime && entry.endTime ? formatTimeRange(entry) : '';
-      const noteCell = locTag + [timeRange, entry.note || ''].filter(Boolean).join(' · ');
+      const noteCell = locTag + [timeRange, entry.note || '', locationTextForPdf(entry)].filter(Boolean).join(' · ');
       return [
         dateCell,
         dayOfWeekName(entry.date, true),
@@ -165,6 +189,7 @@ function generatePdfReport(scopedEntries, from, to) {
     ];
     const rows = tripEntries.map((entry) => {
       const r = computeEntry(entry);
+      const noteCell = [entry.note || '', locationTextForPdf(entry)].filter(Boolean).join(' · ');
       return [
         pdfFormatDate(entry.date),
         pdfFormatDate(entryEndDate(entry)),
@@ -172,7 +197,7 @@ function generatePdfReport(scopedEntries, from, to) {
         entry.destination || '',
         formatMoney(entry.dailyAllowance || 0),
         formatMoney(r.tripAllowance),
-        entry.note || '',
+        noteCell,
       ];
     });
     y = pdfDrawTable(doc, y, columns, rows);
