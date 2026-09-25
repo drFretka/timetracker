@@ -311,16 +311,25 @@ button.secondary {
   margin-top: 4px;
 }
 
-.delete-btn {
+.entry-card-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.delete-btn, .edit-btn {
   background: none;
   border: none;
-  color: var(--danger);
   cursor: pointer;
   font-size: 1.1rem;
   padding: 4px 6px;
   min-height: auto;
   width: auto;
   line-height: 1;
+}
+
+.delete-btn {
+  color: var(--danger);
 }
 
 .empty-state {

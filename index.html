@@ -64,7 +64,7 @@
     </section>
 
     <section class="form-section">
-      <h2>Dodaj wpis ręcznie</h2>
+      <h2 id="formTitle">Dodaj wpis ręcznie</h2>
       <form id="entryForm">
         <div class="form-row">
           <label for="type">Typ wpisu</label>
@@ -73,6 +73,14 @@
             <option value="leave">Wykorzystanie nadgodzin jako urlop</option>
             <option value="trip">Delegacja (podróż służbowa)</option>
           </select>
+        </div>
+
+        <div class="form-row" id="workLocationRow">
+          <label>Miejsce</label>
+          <div class="clock-location" id="workLocationToggle">
+            <button type="button" class="loc-btn active" data-loc="office">🏢 Firma</button>
+            <button type="button" class="loc-btn" data-loc="trip">🚗 Delegacja / w terenie</button>
+          </div>
         </div>
 
         <div class="form-row" id="dateRow">
@@ -127,7 +135,8 @@
           <input type="text" id="note" placeholder="np. wyjście wcześniej w piątek">
         </div>
 
-        <button type="submit">Dodaj wpis</button>
+        <button type="submit" id="submitEntryBtn">Dodaj wpis</button>
+        <button type="button" id="cancelEditBtn" class="secondary" style="display:none;">Anuluj edycję</button>
       </form>
     </section>
 

@@ -421,6 +421,8 @@ const typeSelect = document.getElementById('type');
 const dateLabel = document.getElementById('dateLabel');
 const endDateRow = document.getElementById('endDateRow');
 const endDateLabel = endDateRow.querySelector('label');
+const workLocationRow = document.getElementById('workLocationRow');
+const workLocationToggle = document.getElementById('workLocationToggle');
 const workTimeRow = document.getElementById('workTimeRow');
 const breakRow = document.getElementById('breakRow');
 const computedHoursEl = document.getElementById('computedHours');
@@ -437,11 +439,26 @@ const hoursLeavePerDayInput = document.getElementById('hoursLeavePerDay');
 const destinationInput = document.getElementById('destination');
 const tripLocationBtn = document.getElementById('tripLocationBtn');
 const tripLocationStatus = document.getElementById('tripLocationStatus');
+const noteInput = document.getElementById('note');
+const entryForm = document.getElementById('entryForm');
+const formTitleEl = document.getElementById('formTitle');
+const submitEntryBtn = document.getElementById('submitEntryBtn');
+const cancelEditBtn = document.getElementById('cancelEditBtn');
 
 let tripCapturedLocation = null; // { coords, address } from the "use GPS" button, cleared on submit/type change
+let workLocationChoice = 'office';
+let editingId = null; // id of the entry currently being edited, or null when adding a new one
+
+workLocationToggle.addEventListener('click', (e) => {
+  const btn = e.target.closest('.loc-btn');
+  if (!btn) return;
+  workLocationChoice = btn.dataset.loc;
+  workLocationToggle.querySelectorAll('.loc-btn').forEach((b) => b.classList.toggle('active', b === btn));
+});
 
 function updateFormFields() {
   const type = typeSelect.value;
+  workLocationRow.style.display = type === 'work' ? 'flex' : 'none';
   workTimeRow.style.display = type === 'work' ? 'flex' : 'none';
   breakRow.style.display = type === 'work' ? 'flex' : 'none';
   hoursLeaveRow.style.display = type === 'leave' ? 'flex' : 'none';
@@ -516,15 +533,62 @@ tripLocationBtn.addEventListener('click', async () => {
 typeSelect.addEventListener('change', updateFormFields);
 updateFormFields();
 
-document.getElementById('entryForm').addEventListener('submit', (e) => {
+function resetForm() {
+  entryForm.reset();
+  editingId = null;
+  workLocationChoice = 'office';
+  workLocationToggle.querySelectorAll('.loc-btn').forEach((b) => b.classList.toggle('active', b.dataset.loc === 'office'));
+  formTitleEl.textContent = 'Dodaj wpis ręcznie';
+  submitEntryBtn.textContent = 'Dodaj wpis';
+  cancelEditBtn.style.display = 'none';
+  updateFormFields();
+}
+
+function startEditEntry(id) {
+  const entry = entries.find((e) => e.id === id);
+  if (!entry) return;
+  editingId = id;
+
+  typeSelect.value = entry.type;
+  updateFormFields();
+  dateInput.value = entry.date;
+  noteInput.value = entry.note || '';
+
+  if (entry.type === 'work') {
+    workLocationChoice = entry.location || 'office';
+    workLocationToggle.querySelectorAll('.loc-btn').forEach((b) => b.classList.toggle('active', b.dataset.loc === workLocationChoice));
+    startTimeInput.value = entry.startTime || '';
+    endTimeInput.value = entry.endTime || '';
+    breakMinutesInput.value = entry.breakMinutes || '';
+  } else if (entry.type === 'leave') {
+    endDateInput.value = entry.endDate || '';
+    hoursLeavePerDayInput.value = entry.hoursPerDay || 8;
+  } else if (entry.type === 'trip') {
+    endDateInput.value = entry.endDate || '';
+    destinationInput.value = entry.destination || '';
+    document.getElementById('dailyAllowance').value = entry.dailyAllowance || '';
+  }
+  updateComputedHoursPreview();
+  updateComputedLeavePreview();
+
+  formTitleEl.textContent = 'Edytuj wpis';
+  submitEntryBtn.textContent = 'Zapisz zmiany';
+  cancelEditBtn.style.display = 'block';
+  document.getElementById('formTitle').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+cancelEditBtn.addEventListener('click', resetForm);
+
+entryForm.addEventListener('submit', (e) => {
   e.preventDefault();
   const type = typeSelect.value;
   const date = dateInput.value;
-  const note = document.getElementById('note').value.trim();
+  const note = noteInput.value.trim();
 
   if (!date) return;
 
-  const entry = { id: Date.now(), type, date, note };
+  const existing = editingId ? entries.find((x) => x.id === editingId) : null;
+  const entry = { id: existing ? existing.id : Date.now(), type, date, note };
 
   if (type === 'work') {
     if (!startTimeInput.value || !endTimeInput.value) { alert('Podaj godzinę rozpoczęcia i zakończenia.'); return; }
@@ -535,7 +599,15 @@ document.getElementById('entryForm').addEventListener('submit', (e) => {
     entry.endTime = endTimeInput.value;
     entry.breakMinutes = breakMinutes;
     entry.hours = hours;
-    entry.location = 'office';
+    entry.location = workLocationChoice;
+    // Editing doesn't expose GPS controls for work entries — keep whatever
+    // coordinates/address the original entry had (from the clock or import).
+    if (existing) {
+      if (existing.startCoords) entry.startCoords = existing.startCoords;
+      if (existing.startAddress) entry.startAddress = existing.startAddress;
+      if (existing.endCoords) entry.endCoords = existing.endCoords;
+      if (existing.endAddress) entry.endAddress = existing.endAddress;
+    }
   } else if (type === 'leave') {
     const endDate = endDateInput.value || date;
     if (endDate < date) { alert('Data zakończenia nie może być wcześniejsza niż data rozpoczęcia.'); return; }
@@ -556,14 +628,23 @@ document.getElementById('entryForm').addEventListener('submit', (e) => {
     if (tripCapturedLocation && tripCapturedLocation.coords) {
       entry.startCoords = tripCapturedLocation.coords;
       entry.startAddress = tripCapturedLocation.address;
+    } else if (existing) {
+      if (existing.startCoords) entry.startCoords = existing.startCoords;
+      if (existing.startAddress) entry.startAddress = existing.startAddress;
+      if (existing.endCoords) entry.endCoords = existing.endCoords;
+      if (existing.endAddress) entry.endAddress = existing.endAddress;
     }
   }
 
-  entries.push(entry);
+  if (existing) {
+    entries = entries.map((x) => (x.id === existing.id ? entry : x));
+  } else {
+    entries.push(entry);
+  }
   saveEntries(entries);
-  e.target.reset();
-  updateFormFields();
+  resetForm();
   refresh();
+  showToast(existing ? 'Zapisano zmiany.' : 'Dodano wpis.');
 });
 
 // ---------- Entries list rendering ----------
@@ -665,7 +746,10 @@ function renderEntriesList() {
     card.innerHTML = `
       <div class="entry-card-top">
         <span class="entry-date">${entry.date} · ${dayName}</span>
-        <button class="delete-btn" data-id="${entry.id}" title="Usuń">✕</button>
+        <span class="entry-card-actions">
+          <button class="edit-btn" data-id="${entry.id}" title="Edytuj">✏️</button>
+          <button class="delete-btn" data-id="${entry.id}" title="Usuń">✕</button>
+        </span>
       </div>
       <span class="entry-badge">${typeBadge(entry.type)}</span>${locationBadge(entry)}
       <div class="entry-detail">${entryDetailHtml(entry)}</div>
@@ -673,6 +757,10 @@ function renderEntriesList() {
     `;
     container.appendChild(card);
   }
+
+  container.querySelectorAll('.edit-btn').forEach((btn) => {
+    btn.addEventListener('click', () => startEditEntry(Number(btn.dataset.id)));
+  });
 
   container.querySelectorAll('.delete-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -683,6 +771,7 @@ function renderEntriesList() {
       if (!confirm(`Usunąć wpis?\n${label}\n\nTej operacji nie można cofnąć.`)) return;
       entries = entries.filter((e) => e.id !== id);
       saveEntries(entries);
+      if (editingId === id) resetForm();
       refresh();
     });
   });
