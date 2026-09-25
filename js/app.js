@@ -73,22 +73,23 @@ function formatTimeRange(entry) {
   return label;
 }
 
-// Returns { standard, overtime, tripDays, tripAllowance } for one entry.
+// Returns { standard, overtime, tripDays, tripAllowance, dietaAmount } for one entry.
 function computeEntry(entry) {
   if (entry.type === 'leave') {
-    return { standard: 0, overtime: -entry.hours, tripDays: 0, tripAllowance: 0 };
+    return { standard: 0, overtime: -entry.hours, tripDays: 0, tripAllowance: 0, dietaAmount: 0 };
   }
   if (entry.type === 'trip') {
     const days = dateRangeDays(entry.date, entryEndDate(entry));
     const allowance = days * (entry.dailyAllowance || 0);
-    return { standard: 0, overtime: 0, tripDays: days, tripAllowance: allowance };
+    return { standard: 0, overtime: 0, tripDays: days, tripAllowance: allowance, dietaAmount: allowance };
   }
+  const dietaAmount = entry.hasDieta ? (entry.dailyAllowance || 0) : 0;
   if (isWeekday(entry.date)) {
     const standard = Math.min(entry.hours, STANDARD_DAY_HOURS);
     const overtime = Math.max(0, entry.hours - STANDARD_DAY_HOURS);
-    return { standard, overtime, tripDays: 0, tripAllowance: 0 };
+    return { standard, overtime, tripDays: 0, tripAllowance: 0, dietaAmount };
   }
-  return { standard: 0, overtime: entry.hours, tripDays: 0, tripAllowance: 0 };
+  return { standard: 0, overtime: entry.hours, tripDays: 0, tripAllowance: 0, dietaAmount };
 }
 
 // True if an entry (possibly a multi-day trip) overlaps [from, to]. Empty from/to = unbounded.
@@ -101,7 +102,7 @@ function entryOverlapsRange(entry, from, to) {
 }
 
 function summarize(list) {
-  let earned = 0, used = 0, tripDays = 0, tripAllowance = 0, workedHours = 0;
+  let earned = 0, used = 0, tripDays = 0, tripAllowance = 0, workedHours = 0, dietaDays = 0, dietaSum = 0;
   for (const entry of list) {
     const r = computeEntry(entry);
     if (entry.type === 'leave') {
@@ -109,12 +110,18 @@ function summarize(list) {
     } else if (entry.type === 'trip') {
       tripDays += r.tripDays;
       tripAllowance += r.tripAllowance;
+      dietaDays += r.tripDays;
+      dietaSum += r.dietaAmount;
     } else {
       workedHours += entry.hours;
       if (r.overtime > 0) earned += r.overtime;
+      if (entry.hasDieta) {
+        dietaDays += 1;
+        dietaSum += r.dietaAmount;
+      }
     }
   }
-  return { earned, used, balance: earned - used, tripDays, tripAllowance, workedHours };
+  return { earned, used, balance: earned - used, tripDays, tripAllowance, workedHours, dietaDays, dietaSum };
 }
 
 function formatHours(h) {
@@ -241,12 +248,30 @@ const clockStatusEl = document.getElementById('clockStatus');
 const clockElapsedEl = document.getElementById('clockElapsed');
 const clockButtonsEl = document.getElementById('clockButtons');
 const clockCancelBtn = document.getElementById('clockCancelBtn');
+const clockDietaToggle = document.getElementById('clockDietaToggle');
+const clockDietaAmountRow = document.getElementById('clockDietaAmountRow');
+const clockDailyAllowanceInput = document.getElementById('clockDailyAllowance');
+
+let clockDietaChoice = false;
 
 clockLocationToggle.addEventListener('click', (e) => {
-  const btn = e.target.closest('.loc-btn');
+  const btn = e.target.closest('.type-btn');
   if (!btn || activeSession) return;
   clockLocationChoice = btn.dataset.loc;
-  clockLocationToggle.querySelectorAll('.loc-btn').forEach((b) => b.classList.toggle('active', b === btn));
+  clockLocationToggle.querySelectorAll('.type-btn').forEach((b) => b.classList.toggle('active', b === btn));
+  clockDietaToggle.style.display = clockLocationChoice === 'trip' ? 'block' : 'none';
+  if (clockLocationChoice !== 'trip') {
+    clockDietaChoice = false;
+    clockDietaToggle.classList.remove('active');
+    clockDietaAmountRow.style.display = 'none';
+  }
+});
+
+clockDietaToggle.addEventListener('click', () => {
+  if (activeSession) return;
+  clockDietaChoice = !clockDietaChoice;
+  clockDietaToggle.classList.toggle('active', clockDietaChoice);
+  clockDietaAmountRow.style.display = clockDietaChoice ? 'block' : 'none';
 });
 
 function fmtHMS(ms) {
@@ -283,20 +308,27 @@ function renderClock() {
     clockStatusEl.textContent = 'Nie rozpoczęto pracy';
     clockElapsedEl.style.display = 'none';
     clockCancelBtn.style.display = 'none';
-    clockLocationToggle.querySelectorAll('.loc-btn').forEach((b) => {
+    clockLocationToggle.querySelectorAll('.type-btn').forEach((b) => {
       b.classList.toggle('active', b.dataset.loc === clockLocationChoice);
       b.disabled = false;
     });
+    clockDietaToggle.style.display = clockLocationChoice === 'trip' ? 'block' : 'none';
+    clockDietaToggle.disabled = false;
     clockButtonsEl.innerHTML = '<button type="button" id="clockStartBtn" class="clock-btn-start">▶ Start pracy</button>';
     document.getElementById('clockStartBtn').addEventListener('click', () => clockStart(clockLocationChoice));
     stopClockTick();
     return;
   }
 
-  clockLocationToggle.querySelectorAll('.loc-btn').forEach((b) => {
+  clockLocationToggle.querySelectorAll('.type-btn').forEach((b) => {
     b.classList.toggle('active', b.dataset.loc === activeSession.location);
     b.disabled = true;
   });
+  clockDietaToggle.style.display = activeSession.location === 'trip' ? 'block' : 'none';
+  clockDietaToggle.classList.toggle('active', !!activeSession.hasDieta);
+  clockDietaAmountRow.style.display = activeSession.hasDieta ? 'block' : 'none';
+  clockDietaToggle.disabled = true;
+  clockDailyAllowanceInput.disabled = true;
   clockCancelBtn.style.display = 'block';
 
   const now = new Date();
@@ -331,10 +363,12 @@ function renderClock() {
 function clockStart(location) {
   if (activeSession) return;
   const now = new Date();
-  activeSession = { startedAt: now.toISOString(), location, breaks: [], startCoords: null, startAddress: null };
+  const hasDieta = location === 'trip' && clockDietaChoice;
+  const dailyAllowance = hasDieta ? (parseFloat(clockDailyAllowanceInput.value) || 0) : 0;
+  activeSession = { startedAt: now.toISOString(), location, hasDieta, dailyAllowance, breaks: [], startCoords: null, startAddress: null };
   saveActiveSession(activeSession);
   renderClock();
-  showToast(`Rozpoczęto pracę (${location === 'trip' ? 'delegacja' : 'firma'}) o ${pad2(now.getHours())}:${pad2(now.getMinutes())}`);
+  showToast(`Rozpoczęto pracę (${location === 'trip' ? 'teren' : 'firma'}) o ${pad2(now.getHours())}:${pad2(now.getMinutes())}`);
   captureLocation().then(({ coords, address }) => {
     if (!activeSession || activeSession.startedAt !== now.toISOString()) return;
     activeSession.startCoords = coords;
@@ -382,6 +416,8 @@ function clockStop() {
     breakMinutes,
     hours,
     location: session.location,
+    hasDieta: !!session.hasDieta,
+    dailyAllowance: session.dailyAllowance || 0,
     startCoords: session.startCoords,
     startAddress: session.startAddress,
     note: '',
@@ -389,6 +425,10 @@ function clockStop() {
 
   activeSession = null;
   saveActiveSession(null);
+  clockDietaChoice = false;
+  clockDietaToggle.classList.remove('active');
+  clockDietaAmountRow.style.display = 'none';
+  clockDailyAllowanceInput.value = '';
   renderClock();
 
   entries.push(entry);
@@ -410,6 +450,10 @@ function clockCancel() {
   if (!confirm('Na pewno anulować bieżącą sesję pracy? Zarejestrowany czas nie zostanie zapisany.')) return;
   activeSession = null;
   saveActiveSession(null);
+  clockDietaChoice = false;
+  clockDietaToggle.classList.remove('active');
+  clockDietaAmountRow.style.display = 'none';
+  clockDailyAllowanceInput.value = '';
   renderClock();
 }
 
@@ -417,64 +461,81 @@ clockCancelBtn.addEventListener('click', clockCancel);
 
 // ---------- Entry form ----------
 
-const typeSelect = document.getElementById('type');
+const typeButtons = document.getElementById('typeButtons');
 const dateLabel = document.getElementById('dateLabel');
 const endDateRow = document.getElementById('endDateRow');
-const endDateLabel = endDateRow.querySelector('label');
-const workLocationRow = document.getElementById('workLocationRow');
-const workLocationToggle = document.getElementById('workLocationToggle');
 const workTimeRow = document.getElementById('workTimeRow');
 const breakRow = document.getElementById('breakRow');
 const computedHoursEl = document.getElementById('computedHours');
 const hoursLeaveRow = document.getElementById('hoursLeaveRow');
 const computedLeaveHoursEl = document.getElementById('computedLeaveHours');
-const destinationRow = document.getElementById('destinationRow');
-const allowanceRow = document.getElementById('allowanceRow');
+const dietaToggle = document.getElementById('dietaToggle');
+const dietaAmountRow = document.getElementById('dietaAmountRow');
+const workDailyAllowanceInput = document.getElementById('workDailyAllowance');
+const manualLocationRow = document.getElementById('manualLocationRow');
+const startLocationTextInput = document.getElementById('startLocationText');
+const endLocationTextInput = document.getElementById('endLocationText');
+const startLocationGpsBtn = document.getElementById('startLocationGpsBtn');
+const endLocationGpsBtn = document.getElementById('endLocationGpsBtn');
+const manualLocationStatus = document.getElementById('manualLocationStatus');
+const travelTimeRow = document.getElementById('travelTimeRow');
+const travelMinutesInput = document.getElementById('travelMinutes');
 const startTimeInput = document.getElementById('startTime');
 const endTimeInput = document.getElementById('endTime');
 const breakMinutesInput = document.getElementById('breakMinutes');
 const dateInput = document.getElementById('date');
 const endDateInput = document.getElementById('endDate');
 const hoursLeavePerDayInput = document.getElementById('hoursLeavePerDay');
-const destinationInput = document.getElementById('destination');
-const tripLocationBtn = document.getElementById('tripLocationBtn');
-const tripLocationStatus = document.getElementById('tripLocationStatus');
 const noteInput = document.getElementById('note');
 const entryForm = document.getElementById('entryForm');
 const formTitleEl = document.getElementById('formTitle');
 const submitEntryBtn = document.getElementById('submitEntryBtn');
 const cancelEditBtn = document.getElementById('cancelEditBtn');
 
-let tripCapturedLocation = null; // { coords, address } from the "use GPS" button, cleared on submit/type change
-let workLocationChoice = 'office';
+let formKind = 'office'; // 'office' | 'trip' | 'leave' — mirrors the type buttons
+let formDieta = false;
+let manualStartCoords = null; // set only when the GPS button (not manual typing) captured a point
+let manualEndCoords = null;
 let editingId = null; // id of the entry currently being edited, or null when adding a new one
 
-workLocationToggle.addEventListener('click', (e) => {
-  const btn = e.target.closest('.loc-btn');
+typeButtons.addEventListener('click', (e) => {
+  const btn = e.target.closest('.type-btn');
   if (!btn) return;
-  workLocationChoice = btn.dataset.loc;
-  workLocationToggle.querySelectorAll('.loc-btn').forEach((b) => b.classList.toggle('active', b === btn));
+  formKind = btn.dataset.type;
+  typeButtons.querySelectorAll('.type-btn').forEach((b) => b.classList.toggle('active', b === btn));
+  updateFormFields();
+});
+
+dietaToggle.addEventListener('click', () => {
+  formDieta = !formDieta;
+  dietaToggle.classList.toggle('active', formDieta);
+  dietaAmountRow.style.display = formDieta ? 'flex' : 'none';
 });
 
 function updateFormFields() {
-  const type = typeSelect.value;
-  workLocationRow.style.display = type === 'work' ? 'flex' : 'none';
-  workTimeRow.style.display = type === 'work' ? 'flex' : 'none';
-  breakRow.style.display = type === 'work' ? 'flex' : 'none';
-  hoursLeaveRow.style.display = type === 'leave' ? 'flex' : 'none';
-  endDateRow.style.display = (type === 'trip' || type === 'leave') ? 'flex' : 'none';
-  endDateLabel.textContent = type === 'leave' ? 'Data zakończenia (jeśli urlop wielodniowy)' : 'Data zakończenia';
-  destinationRow.style.display = type === 'trip' ? 'flex' : 'none';
-  allowanceRow.style.display = type === 'trip' ? 'flex' : 'none';
-  dateLabel.textContent = type === 'trip' ? 'Data rozpoczęcia' : (type === 'leave' ? 'Data (od)' : 'Data');
-  tripCapturedLocation = null;
-  tripLocationStatus.textContent = '';
+  const kind = formKind;
+  const isWork = kind === 'office' || kind === 'trip';
+  workTimeRow.style.display = isWork ? 'flex' : 'none';
+  breakRow.style.display = isWork ? 'flex' : 'none';
+  dietaToggle.style.display = kind === 'trip' ? 'block' : 'none';
+  manualLocationRow.style.display = kind === 'trip' ? 'flex' : 'none';
+  travelTimeRow.style.display = kind === 'trip' ? 'flex' : 'none';
+  if (kind !== 'trip') {
+    formDieta = false;
+    dietaToggle.classList.remove('active');
+    dietaAmountRow.style.display = 'none';
+  }
+  hoursLeaveRow.style.display = kind === 'leave' ? 'flex' : 'none';
+  endDateRow.style.display = kind === 'leave' ? 'flex' : 'none';
+  dateLabel.textContent = kind === 'leave' ? 'Data (od)' : 'Data';
+  manualLocationStatus.textContent = '';
   updateComputedHoursPreview();
   updateComputedLeavePreview();
 }
 
 function updateComputedHoursPreview() {
-  if (typeSelect.value !== 'work' || !startTimeInput.value || !endTimeInput.value) {
+  const isWork = formKind === 'office' || formKind === 'trip';
+  if (!isWork || !startTimeInput.value || !endTimeInput.value) {
     computedHoursEl.style.display = 'none';
     return;
   }
@@ -485,7 +546,7 @@ function updateComputedHoursPreview() {
 }
 
 function updateComputedLeavePreview() {
-  if (typeSelect.value !== 'leave' || !dateInput.value) {
+  if (formKind !== 'leave' || !dateInput.value) {
     computedLeaveHoursEl.style.display = 'none';
     return;
   }
@@ -510,34 +571,52 @@ function updateComputedLeavePreview() {
   input.addEventListener('input', updateComputedLeavePreview);
 });
 
-tripLocationBtn.addEventListener('click', async () => {
-  tripLocationStatus.textContent = 'Pobieranie lokalizacji…';
-  tripLocationBtn.disabled = true;
+async function useGpsForField(textInput, coordsSetter, btn) {
+  const originalLabel = btn.textContent;
+  btn.textContent = '…';
+  btn.disabled = true;
   const result = await captureLocation();
-  tripLocationBtn.disabled = false;
+  btn.textContent = originalLabel;
+  btn.disabled = false;
   if (!result.coords) {
-    tripLocationStatus.textContent = 'Nie udało się pobrać lokalizacji (brak zgody lub sygnału GPS).';
+    manualLocationStatus.textContent = 'Nie udało się pobrać lokalizacji (brak zgody lub sygnału GPS).';
     return;
   }
-  tripCapturedLocation = result;
-  if (result.address) destinationInput.value = result.address;
+  coordsSetter(result.coords);
   if (result.address) {
-    tripLocationStatus.textContent = `Ustawiono: ${result.address}`;
+    textInput.value = result.address;
+    manualLocationStatus.textContent = `Ustawiono: ${result.address}`;
   } else if (!navigator.onLine) {
-    tripLocationStatus.textContent = `Brak internetu — zapisano współrzędne (${result.coords.lat.toFixed(5)}, ${result.coords.lon.toFixed(5)}), adres uzupełni się automatycznie po powrocie zasięgu.`;
+    textInput.value = `${result.coords.lat.toFixed(5)}, ${result.coords.lon.toFixed(5)}`;
+    manualLocationStatus.textContent = 'Brak internetu — zapisano współrzędne, adres uzupełni się automatycznie po powrocie zasięgu.';
   } else {
-    tripLocationStatus.textContent = `Współrzędne: ${result.coords.lat.toFixed(5)}, ${result.coords.lon.toFixed(5)}`;
+    textInput.value = `${result.coords.lat.toFixed(5)}, ${result.coords.lon.toFixed(5)}`;
+    manualLocationStatus.textContent = 'Zapisano współrzędne.';
   }
-});
+}
 
-typeSelect.addEventListener('change', updateFormFields);
+startLocationGpsBtn.addEventListener('click', () => useGpsForField(startLocationTextInput, (c) => { manualStartCoords = c; }, startLocationGpsBtn));
+endLocationGpsBtn.addEventListener('click', () => useGpsForField(endLocationTextInput, (c) => { manualEndCoords = c; }, endLocationGpsBtn));
+
+// Typing directly (instead of using the GPS button) means we no longer have
+// a matching coordinate pair for that text, so drop any stale coords.
+startLocationTextInput.addEventListener('input', () => { manualStartCoords = null; });
+endLocationTextInput.addEventListener('input', () => { manualEndCoords = null; });
+
 updateFormFields();
+
+function setActiveTypeButton(kind) {
+  typeButtons.querySelectorAll('.type-btn').forEach((b) => b.classList.toggle('active', b.dataset.type === kind));
+}
 
 function resetForm() {
   entryForm.reset();
   editingId = null;
-  workLocationChoice = 'office';
-  workLocationToggle.querySelectorAll('.loc-btn').forEach((b) => b.classList.toggle('active', b.dataset.loc === 'office'));
+  formKind = 'office';
+  formDieta = false;
+  manualStartCoords = null;
+  manualEndCoords = null;
+  setActiveTypeButton('office');
   formTitleEl.textContent = 'Dodaj wpis ręcznie';
   submitEntryBtn.textContent = 'Dodaj wpis';
   cancelEditBtn.style.display = 'none';
@@ -549,24 +628,28 @@ function startEditEntry(id) {
   if (!entry) return;
   editingId = id;
 
-  typeSelect.value = entry.type;
+  formKind = entry.type === 'leave' ? 'leave' : (entry.location === 'trip' ? 'trip' : 'office');
+  setActiveTypeButton(formKind);
   updateFormFields();
   dateInput.value = entry.date;
   noteInput.value = entry.note || '';
+  manualStartCoords = null;
+  manualEndCoords = null;
 
   if (entry.type === 'work') {
-    workLocationChoice = entry.location || 'office';
-    workLocationToggle.querySelectorAll('.loc-btn').forEach((b) => b.classList.toggle('active', b.dataset.loc === workLocationChoice));
     startTimeInput.value = entry.startTime || '';
     endTimeInput.value = entry.endTime || '';
     breakMinutesInput.value = entry.breakMinutes || '';
+    formDieta = !!entry.hasDieta;
+    dietaToggle.classList.toggle('active', formDieta);
+    dietaAmountRow.style.display = formDieta ? 'flex' : 'none';
+    workDailyAllowanceInput.value = entry.dailyAllowance || '';
+    startLocationTextInput.value = entry.startAddress || '';
+    endLocationTextInput.value = entry.endAddress || '';
+    travelMinutesInput.value = entry.travelMinutes || '';
   } else if (entry.type === 'leave') {
     endDateInput.value = entry.endDate || '';
     hoursLeavePerDayInput.value = entry.hoursPerDay || 8;
-  } else if (entry.type === 'trip') {
-    endDateInput.value = entry.endDate || '';
-    destinationInput.value = entry.destination || '';
-    document.getElementById('dailyAllowance').value = entry.dailyAllowance || '';
   }
   updateComputedHoursPreview();
   updateComputedLeavePreview();
@@ -581,7 +664,8 @@ cancelEditBtn.addEventListener('click', resetForm);
 
 entryForm.addEventListener('submit', (e) => {
   e.preventDefault();
-  const type = typeSelect.value;
+  const kind = formKind;
+  const type = kind === 'leave' ? 'leave' : 'work';
   const date = dateInput.value;
   const note = noteInput.value.trim();
 
@@ -599,10 +683,29 @@ entryForm.addEventListener('submit', (e) => {
     entry.endTime = endTimeInput.value;
     entry.breakMinutes = breakMinutes;
     entry.hours = hours;
-    entry.location = workLocationChoice;
-    // Editing doesn't expose GPS controls for work entries — keep whatever
-    // coordinates/address the original entry had (from the clock or import).
-    if (existing) {
+    entry.location = kind === 'trip' ? 'trip' : 'office';
+
+    if (kind === 'trip') {
+      entry.hasDieta = formDieta;
+      entry.dailyAllowance = formDieta ? (parseFloat(workDailyAllowanceInput.value) || 0) : 0;
+      const travelMinutes = parseFloat(travelMinutesInput.value) || 0;
+      if (travelMinutes > 0) entry.travelMinutes = travelMinutes;
+
+      const startText = startLocationTextInput.value.trim();
+      const endText = endLocationTextInput.value.trim();
+      if (startText) {
+        entry.startAddress = startText;
+        if (manualStartCoords) entry.startCoords = manualStartCoords;
+        else if (existing && existing.startAddress === startText && existing.startCoords) entry.startCoords = existing.startCoords;
+      }
+      if (endText) {
+        entry.endAddress = endText;
+        if (manualEndCoords) entry.endCoords = manualEndCoords;
+        else if (existing && existing.endAddress === endText && existing.endCoords) entry.endCoords = existing.endCoords;
+      }
+    } else if (existing) {
+      // Firma entries don't show location controls, but preserve any GPS
+      // data the entry already had (e.g. captured earlier via the clock).
       if (existing.startCoords) entry.startCoords = existing.startCoords;
       if (existing.startAddress) entry.startAddress = existing.startAddress;
       if (existing.endCoords) entry.endCoords = existing.endCoords;
@@ -618,22 +721,6 @@ entryForm.addEventListener('submit', (e) => {
     entry.endDate = endDate;
     entry.hoursPerDay = perDay;
     entry.hours = weekdays * perDay;
-  } else if (type === 'trip') {
-    const endDate = endDateInput.value || date;
-    if (endDate < date) { alert('Data zakończenia nie może być wcześniejsza niż data rozpoczęcia.'); return; }
-    const dailyAllowance = parseFloat(document.getElementById('dailyAllowance').value) || 0;
-    entry.endDate = endDate;
-    entry.destination = destinationInput.value.trim();
-    entry.dailyAllowance = dailyAllowance;
-    if (tripCapturedLocation && tripCapturedLocation.coords) {
-      entry.startCoords = tripCapturedLocation.coords;
-      entry.startAddress = tripCapturedLocation.address;
-    } else if (existing) {
-      if (existing.startCoords) entry.startCoords = existing.startCoords;
-      if (existing.startAddress) entry.startAddress = existing.startAddress;
-      if (existing.endCoords) entry.endCoords = existing.endCoords;
-      if (existing.endAddress) entry.endAddress = existing.endAddress;
-    }
   }
 
   if (existing) {
@@ -670,14 +757,16 @@ function populateMonthFilter() {
 
 function locationLinksHtml(entry) {
   const parts = [];
-  if (entry.startCoords) {
+  if (entry.startAddress || entry.startCoords) {
     const label = entry.type === 'trip' ? 'Start' : 'Miejsce';
     const text = entry.startAddress || `${entry.startCoords.lat.toFixed(5)}, ${entry.startCoords.lon.toFixed(5)}`;
-    parts.push(`📍 ${label}: ${escapeHtml(text)} — <a class="location-link" href="${googleMapsPointUrl(entry.startCoords)}" target="_blank" rel="noopener">mapa</a>`);
+    const mapLink = entry.startCoords ? ` — <a class="location-link" href="${googleMapsPointUrl(entry.startCoords)}" target="_blank" rel="noopener">mapa</a>` : '';
+    parts.push(`📍 ${label}: ${escapeHtml(text)}${mapLink}`);
   }
-  if (entry.endCoords) {
+  if (entry.endAddress || entry.endCoords) {
     const text = entry.endAddress || `${entry.endCoords.lat.toFixed(5)}, ${entry.endCoords.lon.toFixed(5)}`;
-    parts.push(`📍 Koniec: ${escapeHtml(text)} — <a class="location-link" href="${googleMapsPointUrl(entry.endCoords)}" target="_blank" rel="noopener">mapa</a>`);
+    const mapLink = entry.endCoords ? ` — <a class="location-link" href="${googleMapsPointUrl(entry.endCoords)}" target="_blank" rel="noopener">mapa</a>` : '';
+    parts.push(`📍 Koniec: ${escapeHtml(text)}${mapLink}`);
   }
   if (entry.startCoords && entry.endCoords) {
     const km = haversineKm(entry.startCoords, entry.endCoords);
@@ -711,7 +800,10 @@ function entryDetailHtml(entry) {
     ? `<span class="overtime-cell">+${r.overtime.toFixed(2)} h nadgodzin</span>`
     : 'brak nadgodzin';
   const timeRange = entry.startTime && entry.endTime ? `${formatTimeRange(entry)} · ` : '';
-  return `${timeRange}${formatHours(entry.hours)} — standard ${r.standard.toFixed(2)} h, ${overtimeHtml}` + locationLinksHtml(entry);
+  let html = `${timeRange}${formatHours(entry.hours)} — standard ${r.standard.toFixed(2)} h, ${overtimeHtml}`;
+  if (entry.hasDieta) html += ` · <span class="dieta-cell">dieta ${formatMoney(entry.dailyAllowance || 0)}</span>`;
+  if (entry.travelMinutes) html += ` · dojazd ${entry.travelMinutes} min (osobno)`;
+  return html + locationLinksHtml(entry);
 }
 
 function typeBadge(type) {
@@ -723,7 +815,7 @@ function typeBadge(type) {
 function locationBadge(entry) {
   if (entry.type !== 'work' || !entry.location) return '';
   return entry.location === 'trip'
-    ? '<span class="entry-badge-location">🚗 W delegacji</span>'
+    ? '<span class="entry-badge-location">🚗 W terenie</span>'
     : '<span class="entry-badge-location">🏢 W firmie</span>';
 }
 
@@ -792,8 +884,8 @@ function renderSummary() {
   document.getElementById('sumBalanceDays').textContent =
     `≈ ${sign}${days} dni + ${rem.toFixed(2)} h (przy ${STANDARD_DAY_HOURS}h/dzień)`;
 
-  document.getElementById('sumTripDays').textContent = `${s.tripDays} dni`;
-  document.getElementById('sumTripAllowance').textContent = `${formatMoney(s.tripAllowance)} diety`;
+  document.getElementById('sumTripDays').textContent = `${s.dietaDays} dni`;
+  document.getElementById('sumTripAllowance').textContent = `${formatMoney(s.dietaSum)} diety`;
 }
 
 document.getElementById('monthFilter').addEventListener('change', () => {
@@ -861,8 +953,8 @@ function renderReportSummary() {
   document.getElementById('repOvertimeEarned').textContent = formatHours(s.earned);
   document.getElementById('repOvertimeUsed').textContent = formatHours(s.used);
   document.getElementById('repBalance').textContent = formatHours(s.balance);
-  document.getElementById('repTripDays').textContent = `${s.tripDays} dni`;
-  document.getElementById('repTripAllowance').textContent = `${formatMoney(s.tripAllowance)} diety`;
+  document.getElementById('repTripDays').textContent = `${s.dietaDays} dni`;
+  document.getElementById('repTripAllowance').textContent = `${formatMoney(s.dietaSum)} diety`;
 }
 
 document.getElementById('reportFrom').addEventListener('change', renderReportSummary);

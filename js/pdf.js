@@ -99,12 +99,12 @@ function shortAddress(address, maxParts) {
 
 function locationTextForPdf(entry) {
   const parts = [];
-  if (entry.startCoords) {
+  if (entry.startAddress || entry.startCoords) {
     const label = entry.type === 'trip' ? 'Start' : 'Miejsce';
     const text = entry.startAddress ? shortAddress(entry.startAddress, 2) : `${entry.startCoords.lat.toFixed(5)}, ${entry.startCoords.lon.toFixed(5)}`;
     parts.push(`${label}: ${text}`);
   }
-  if (entry.endCoords) {
+  if (entry.endAddress || entry.endCoords) {
     const text = entry.endAddress ? shortAddress(entry.endAddress, 2) : `${entry.endCoords.lat.toFixed(5)}, ${entry.endCoords.lon.toFixed(5)}`;
     parts.push(`Koniec: ${text}`);
   }
@@ -154,9 +154,11 @@ function generatePdfReport(scopedEntries, from, to) {
       const dateCell = entry.date === entryEndDate(entry)
         ? pdfFormatDate(entry.date)
         : `${pdfFormatDate(entry.date)}–${pdfFormatDate(entryEndDate(entry))}`;
-      const locTag = entry.type === 'work' && entry.location === 'trip' ? '[Delegacja] ' : '';
+      const locTag = entry.type === 'work' && entry.location === 'trip' ? '[Teren] ' : '';
       const timeRange = entry.startTime && entry.endTime ? formatTimeRange(entry) : '';
-      const noteCell = locTag + [timeRange, entry.note || '', locationTextForPdf(entry)].filter(Boolean).join(' · ');
+      const dietaText = entry.hasDieta ? `dieta ${formatMoney(entry.dailyAllowance || 0)}` : '';
+      const travelText = entry.travelMinutes ? `dojazd ${entry.travelMinutes} min` : '';
+      const noteCell = locTag + [timeRange, entry.note || '', dietaText, travelText, locationTextForPdf(entry)].filter(Boolean).join(' · ');
       return [
         dateCell,
         dayOfWeekName(entry.date, true),
@@ -231,8 +233,8 @@ function generatePdfReport(scopedEntries, from, to) {
     ['Nadgodziny wypracowane:', formatHours(s.earned)],
     ['Nadgodziny wykorzystane jako urlop:', formatHours(s.used)],
     ['Saldo nadgodzin na koniec okresu:', `${formatHours(s.balance)} (≈ ${balanceSign}${days} dni + ${rem.toFixed(2)} h)`],
-    ['Liczba dni delegacji:', `${s.tripDays} dni`],
-    ['Suma diet z delegacji:', formatMoney(s.tripAllowance)],
+    ['Liczba dni z dietą:', `${s.dietaDays} dni`],
+    ['Suma diet:', formatMoney(s.dietaSum)],
   ];
   const boxH = summaryLines.length * 6.5 + 6;
   doc.rect(PDF_MARGIN, y, boxW, boxH, 'FD');

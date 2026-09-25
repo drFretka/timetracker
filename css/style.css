@@ -376,13 +376,13 @@ footer {
   text-align: left;
 }
 
-.clock-location {
+.type-buttons {
   display: flex;
   gap: 8px;
   margin-bottom: 14px;
 }
 
-.loc-btn {
+.type-btn {
   flex: 1;
   background: var(--card-bg);
   color: var(--text-muted);
@@ -394,7 +394,7 @@ footer {
   min-height: 42px;
 }
 
-.loc-btn.active {
+.type-btn.active {
   background: var(--accent-light);
   color: var(--accent);
   border-color: var(--accent);
@@ -477,6 +477,44 @@ footer {
   background: #f1f5f9;
   color: var(--text-muted);
   margin: 0 0 6px 6px;
+}
+
+.dieta-cell {
+  color: #b45309;
+  font-weight: 600;
+}
+
+.dieta-toggle-btn {
+  background: var(--card-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.dieta-toggle-btn.active {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #b45309;
+}
+
+.location-input-with-btn {
+  display: flex;
+  gap: 8px;
+}
+
+.location-input-with-btn input {
+  flex: 1;
+}
+
+.gps-btn {
+  width: 48px;
+  flex-shrink: 0;
+  padding: 0;
+  font-size: 1.2rem;
+  background: var(--accent-light);
+  color: var(--accent);
+  border: 1px solid var(--accent);
 }
 
 /* ---------- Toast (NFC / punch confirmations) ---------- */

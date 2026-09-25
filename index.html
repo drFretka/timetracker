@@ -43,7 +43,7 @@
         <span class="summary-sub" id="sumBalanceDays"></span>
       </div>
       <div class="summary-card">
-        <span class="summary-label">Delegacje</span>
+        <span class="summary-label">Diety</span>
         <span class="summary-value" id="sumTripDays">0 dni</span>
         <span class="summary-sub" id="sumTripAllowance">0.00 zł diety</span>
       </div>
@@ -51,9 +51,13 @@
 
     <section class="clock-card" id="clockCard">
       <h2>Zegar pracy</h2>
-      <div class="clock-location" id="clockLocationToggle">
-        <button type="button" class="loc-btn active" data-loc="office">🏢 Firma</button>
-        <button type="button" class="loc-btn" data-loc="trip">🚗 Delegacja / w terenie</button>
+      <div class="type-buttons" id="clockLocationToggle">
+        <button type="button" class="type-btn active" data-loc="office">🏢 Firma</button>
+        <button type="button" class="type-btn" data-loc="trip">🚗 Teren</button>
+      </div>
+      <button type="button" id="clockDietaToggle" class="dieta-toggle-btn" style="display:none;">💰 Dieta za ten dzień</button>
+      <div class="form-row" id="clockDietaAmountRow" style="display:none;">
+        <input type="number" id="clockDailyAllowance" step="0.01" min="0" placeholder="Kwota diety (zł)">
       </div>
       <p class="clock-status" id="clockStatus">Nie rozpoczęto pracy</p>
       <p class="clock-elapsed" id="clockElapsed" style="display:none;"></p>
@@ -67,20 +71,18 @@
       <h2 id="formTitle">Dodaj wpis ręcznie</h2>
       <form id="entryForm">
         <div class="form-row">
-          <label for="type">Typ wpisu</label>
-          <select id="type">
-            <option value="work">Przepracowany dzień</option>
-            <option value="leave">Wykorzystanie nadgodzin jako urlop</option>
-            <option value="trip">Delegacja (podróż służbowa)</option>
-          </select>
+          <label>Typ wpisu</label>
+          <div class="type-buttons" id="typeButtons">
+            <button type="button" class="type-btn active" data-type="office">🏢 Firma</button>
+            <button type="button" class="type-btn" data-type="trip">🚗 Teren</button>
+            <button type="button" class="type-btn" data-type="leave">🏖️ Urlop</button>
+          </div>
         </div>
 
-        <div class="form-row" id="workLocationRow">
-          <label>Miejsce</label>
-          <div class="clock-location" id="workLocationToggle">
-            <button type="button" class="loc-btn active" data-loc="office">🏢 Firma</button>
-            <button type="button" class="loc-btn" data-loc="trip">🚗 Delegacja / w terenie</button>
-          </div>
+        <button type="button" id="dietaToggle" class="dieta-toggle-btn" style="display:none;">💰 Dieta za ten dzień</button>
+        <div class="form-row" id="dietaAmountRow" style="display:none;">
+          <label for="workDailyAllowance">Kwota diety (zł)</label>
+          <input type="number" id="workDailyAllowance" step="0.01" min="0" placeholder="np. 45">
         </div>
 
         <div class="form-row" id="dateRow">
@@ -89,7 +91,7 @@
         </div>
 
         <div class="form-row" id="endDateRow" style="display:none;">
-          <label for="endDate">Data zakończenia</label>
+          <label for="endDate">Data zakończenia (jeśli urlop wielodniowy)</label>
           <input type="date" id="endDate">
         </div>
 
@@ -118,16 +120,23 @@
 
         <p class="computed-hours" id="computedLeaveHours" style="display:none;"></p>
 
-        <div class="form-row" id="destinationRow" style="display:none;">
-          <label for="destination">Cel podróży / miejsce</label>
-          <input type="text" id="destination" placeholder="np. Warszawa - klient XYZ">
-          <button type="button" id="tripLocationBtn" class="secondary location-btn">📍 Użyj obecnej lokalizacji</button>
-          <span class="location-status" id="tripLocationStatus"></span>
+        <div class="form-row" id="manualLocationRow" style="display:none;">
+          <label for="startLocationText">Lokalizacja — start</label>
+          <div class="location-input-with-btn">
+            <input type="text" id="startLocationText" placeholder="np. Piaseczno, ul. Kwiatowa 5">
+            <button type="button" id="startLocationGpsBtn" class="gps-btn" title="Użyj GPS">📍</button>
+          </div>
+          <label for="endLocationText" style="margin-top:8px;">Lokalizacja — koniec (opcjonalnie)</label>
+          <div class="location-input-with-btn">
+            <input type="text" id="endLocationText" placeholder="jeśli inna niż start">
+            <button type="button" id="endLocationGpsBtn" class="gps-btn" title="Użyj GPS">📍</button>
+          </div>
+          <span class="location-status" id="manualLocationStatus"></span>
         </div>
 
-        <div class="form-row" id="allowanceRow" style="display:none;">
-          <label for="dailyAllowance">Dieta dzienna (zł)</label>
-          <input type="number" id="dailyAllowance" step="0.01" min="0" placeholder="np. 45">
+        <div class="form-row" id="travelTimeRow" style="display:none;">
+          <label for="travelMinutes">Czas dojazdu (opcjonalnie, min) — liczony osobno, nie wlicza się do godzin pracy</label>
+          <input type="number" id="travelMinutes" step="5" min="0" placeholder="np. 45">
         </div>
 
         <div class="form-row">
@@ -193,7 +202,7 @@
         <span class="summary-value" id="repBalance">0.00 h</span>
       </div>
       <div class="summary-card">
-        <span class="summary-label">Delegacje</span>
+        <span class="summary-label">Diety</span>
         <span class="summary-value" id="repTripDays">0 dni</span>
         <span class="summary-sub" id="repTripAllowance">0.00 zł diety</span>
       </div>
