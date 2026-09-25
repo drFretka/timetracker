@@ -1,16 +1,18 @@
 :root {
-  --bg: #f5f6f8;
+  --bg: #f1f4f9;
   --card-bg: #ffffff;
   --border: #e1e4e8;
-  --text: #1f2328;
-  --text-muted: #57606a;
+  --text: #14181f;
+  --text-muted: #46505c;
   --accent: #2563eb;
+  --accent-dark: #1d4ed8;
   --accent-light: #eff6ff;
   --danger: #dc2626;
   --overtime: #b45309;
   --trip: #0f766e;
   --leave: #15803d;
-  --radius: 10px;
+  --radius: 12px;
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 8px rgba(15, 23, 42, 0.06);
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -23,6 +25,8 @@ body {
   margin: 0;
   min-height: 100%;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
   background: var(--bg);
   color: var(--text);
   padding-bottom: env(safe-area-inset-bottom);
@@ -36,13 +40,15 @@ body {
 
 header h1 {
   margin: 0 0 4px;
-  font-size: 1.4rem;
+  font-size: 1.5rem;
+  letter-spacing: -0.01em;
 }
 
 .subtitle {
   color: var(--text-muted);
   margin: 0 0 18px;
   font-size: 0.85rem;
+  line-height: 1.4;
 }
 
 .tabs {
@@ -89,6 +95,7 @@ header h1 {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  box-shadow: var(--shadow-card);
 }
 
 .summary-card.highlight {
@@ -99,13 +106,15 @@ header h1 {
 .summary-label {
   font-size: 0.72rem;
   color: var(--text-muted);
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
 }
 
 .summary-value {
-  font-size: 1.25rem;
-  font-weight: 600;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .summary-sub {
@@ -119,11 +128,18 @@ header h1 {
   border-radius: var(--radius);
   padding: 16px;
   margin-bottom: 18px;
+  box-shadow: var(--shadow-card);
 }
 
 .form-section h2, .entries-section h2 {
   margin-top: 0;
-  font-size: 1.05rem;
+  margin-bottom: 14px;
+  font-size: 1.1rem;
+}
+
+.form-section h2 {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
 }
 
 .form-row {
@@ -178,16 +194,21 @@ button {
   color: white;
   border: none;
   padding: 12px 18px;
-  border-radius: 8px;
+  border-radius: 9px;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   min-height: 44px;
   width: 100%;
+  transition: background-color 0.15s ease, transform 0.05s ease;
 }
 
 button:hover {
-  opacity: 0.9;
+  background: var(--accent-dark);
+}
+
+button:active {
+  transform: scale(0.98);
 }
 
 button.secondary {
@@ -196,6 +217,11 @@ button.secondary {
   border: 1px solid var(--border);
   width: auto;
   flex: 1;
+}
+
+button.secondary:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
 }
 
 .quick-ranges {
@@ -222,6 +248,8 @@ button.secondary {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
   gap: 8px;
 }
 
@@ -247,7 +275,9 @@ button.secondary {
   border: 1px solid var(--border);
   border-left: 4px solid var(--accent);
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 12px 14px;
+  background: var(--card-bg);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .entry-card.type-leave {
@@ -268,8 +298,8 @@ button.secondary {
 }
 
 .entry-date {
-  font-weight: 600;
-  font-size: 0.92rem;
+  font-weight: 700;
+  font-size: 0.98rem;
 }
 
 .entry-badge {
@@ -297,7 +327,8 @@ button.secondary {
 
 .entry-detail {
   font-size: 0.88rem;
-  line-height: 1.4;
+  line-height: 1.5;
+  color: var(--text);
 }
 
 .entry-detail .overtime-cell {
@@ -368,6 +399,7 @@ footer {
   padding: 16px;
   margin-bottom: 18px;
   text-align: center;
+  box-shadow: var(--shadow-card);
 }
 
 .clock-card h2 {
@@ -476,6 +508,18 @@ footer {
   border-radius: 999px;
   background: #f1f5f9;
   color: var(--text-muted);
+  margin: 0 0 6px 6px;
+}
+
+.entry-badge-normfill {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fffbeb;
+  color: var(--overtime);
+  border: 1px solid #fde68a;
   margin: 0 0 6px 6px;
 }
 
@@ -594,6 +638,77 @@ footer {
 
 #settingsToggleBtn {
   margin-bottom: 8px;
+}
+
+/* ---------- Address autocomplete ---------- */
+
+.location-field {
+  position: relative;
+}
+
+.autocomplete-list {
+  display: none;
+  position: absolute;
+  left: 0;
+  right: 56px;
+  top: 100%;
+  z-index: 20;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-top: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.14);
+}
+
+.autocomplete-item {
+  padding: 10px 12px;
+  font-size: 0.83rem;
+  line-height: 1.35;
+  cursor: pointer;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.autocomplete-item:last-child {
+  border-bottom: none;
+}
+
+.autocomplete-item:hover {
+  background: var(--accent-light);
+}
+
+/* ---------- Cloud sync ---------- */
+
+.sync-box {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border);
+}
+
+.sync-box h4 {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+}
+
+.sync-unavailable {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+}
+
+.sync-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sync-login-form input {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  min-height: 40px;
 }
 
 /* ---------- Toast (NFC / punch confirmations) ---------- */

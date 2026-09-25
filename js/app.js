@@ -19,6 +19,7 @@ function loadEntries() {
 
 function saveEntries(list) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  if (window.onEntriesSaved) window.onEntriesSaved();
 }
 
 let entries = loadEntries();
@@ -37,6 +38,7 @@ function loadSettings() {
 
 function saveSettings(s) {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  if (window.onEntriesSaved) window.onEntriesSaved();
 }
 
 let settings = loadSettings();
@@ -585,11 +587,13 @@ let manualStartCoords = null; // set only when the GPS button (not manual typing
 let manualDestinationCoords = null;
 let manualEndCoords = null;
 let editingId = null; // id of the entry currently being edited, or null when adding a new one
+let pendingNormFillTag = false; // set right before the norm-fill button pre-fills the leave form
 
 typeButtons.addEventListener('click', (e) => {
   const btn = e.target.closest('.type-btn');
   if (!btn) return;
   formKind = btn.dataset.type;
+  pendingNormFillTag = false;
   typeButtons.querySelectorAll('.type-btn').forEach((b) => b.classList.toggle('active', b === btn));
   updateFormFields();
 });
@@ -687,11 +691,79 @@ startLocationGpsBtn.addEventListener('click', () => useGpsForField(startLocation
 destinationLocationGpsBtn.addEventListener('click', () => useGpsForField(destinationLocationTextInput, (c) => { manualDestinationCoords = c; }, destinationLocationGpsBtn));
 endLocationGpsBtn.addEventListener('click', () => useGpsForField(endLocationTextInput, (c) => { manualEndCoords = c; }, endLocationGpsBtn));
 
+// ---------- Address autocomplete (search-as-you-type via Nominatim) ----------
+
+function debounce(fn, ms) {
+  let handle;
+  return (...args) => {
+    clearTimeout(handle);
+    handle = setTimeout(() => fn(...args), ms);
+  };
+}
+
+let autocompleteAbortController = null;
+
+// Uses OpenStreetMap's free Nominatim forward geocoder (no API key required).
+async function forwardGeocode(query) {
+  try {
+    if (autocompleteAbortController) autocompleteAbortController.abort();
+    autocompleteAbortController = new AbortController();
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=pl&q=${encodeURIComponent(query)}`,
+      { signal: autocompleteAbortController.signal, headers: { Accept: 'application/json' } }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.map((d) => ({ label: d.display_name, lat: parseFloat(d.lat), lon: parseFloat(d.lon) }));
+  } catch (e) {
+    return [];
+  }
+}
+
 // Typing directly (instead of using the GPS button) means we no longer have
-// a matching coordinate pair for that text, so drop any stale coords.
-startLocationTextInput.addEventListener('input', () => { manualStartCoords = null; });
-destinationLocationTextInput.addEventListener('input', () => { manualDestinationCoords = null; });
-endLocationTextInput.addEventListener('input', () => { manualEndCoords = null; });
+// a matching coordinate pair for that text, so drop any stale coords; picking
+// a suggestion below restores a coordinate pair.
+function wireLocationAutocomplete(textInput, listEl, coordsSetter) {
+  const runSearch = debounce(async () => {
+    const query = textInput.value.trim();
+    if (query.length < 3) { listEl.innerHTML = ''; listEl.style.display = 'none'; return; }
+    const results = await forwardGeocode(query);
+    if (textInput.value.trim() !== query || results.length === 0) {
+      listEl.innerHTML = '';
+      listEl.style.display = 'none';
+      return;
+    }
+    listEl.innerHTML = results
+      .map((r, i) => `<div class="autocomplete-item" data-i="${i}">${escapeHtml(shortAddress(r.label, 4))}</div>`)
+      .join('');
+    listEl.style.display = 'block';
+    listEl.querySelectorAll('.autocomplete-item').forEach((item) => {
+      item.addEventListener('mousedown', (e) => {
+        e.preventDefault(); // runs before the input's blur handler hides the list
+        const r = results[Number(item.dataset.i)];
+        textInput.value = r.label;
+        coordsSetter({ lat: r.lat, lon: r.lon });
+        listEl.innerHTML = '';
+        listEl.style.display = 'none';
+      });
+    });
+  }, 450);
+
+  textInput.addEventListener('input', () => {
+    coordsSetter(null);
+    runSearch();
+  });
+  textInput.addEventListener('focus', () => {
+    if (listEl.innerHTML) listEl.style.display = 'block';
+  });
+  textInput.addEventListener('blur', () => {
+    setTimeout(() => { listEl.style.display = 'none'; }, 150);
+  });
+}
+
+wireLocationAutocomplete(startLocationTextInput, document.getElementById('startLocationAutocomplete'), (c) => { manualStartCoords = c; });
+wireLocationAutocomplete(destinationLocationTextInput, document.getElementById('destinationLocationAutocomplete'), (c) => { manualDestinationCoords = c; });
+wireLocationAutocomplete(endLocationTextInput, document.getElementById('endLocationAutocomplete'), (c) => { manualEndCoords = c; });
 
 updateFormFields();
 
@@ -702,6 +774,7 @@ function setActiveTypeButton(kind) {
 function resetForm() {
   entryForm.reset();
   editingId = null;
+  pendingNormFillTag = false;
   formKind = 'office';
   formDieta = false;
   manualStartCoords = null;
@@ -822,6 +895,7 @@ entryForm.addEventListener('submit', (e) => {
     entry.endDate = endDate;
     entry.hoursPerDay = perDay;
     entry.hours = weekdays * perDay;
+    if (pendingNormFillTag || (existing && existing.fromNormFill)) entry.fromNormFill = true;
   }
 
   if (existing) {
@@ -933,6 +1007,11 @@ function locationBadge(entry) {
     : '<span class="entry-badge-location">🏢 W firmie</span>';
 }
 
+function normFillBadge(entry) {
+  if (entry.type !== 'leave' || !entry.fromNormFill) return '';
+  return '<span class="entry-badge-normfill">🏦 Uzupełnienie normy</span>';
+}
+
 function renderEntriesList() {
   const container = document.getElementById('entriesList');
   const emptyState = document.getElementById('emptyState');
@@ -957,7 +1036,7 @@ function renderEntriesList() {
           <button class="delete-btn" data-id="${entry.id}" title="Usuń">✕</button>
         </span>
       </div>
-      <span class="entry-badge">${typeBadge(entry.type)}</span>${locationBadge(entry)}
+      <span class="entry-badge">${typeBadge(entry.type)}</span>${locationBadge(entry)}${normFillBadge(entry)}
       <div class="entry-detail">${entryDetailHtml(entry)}</div>
       ${entry.note ? `<div class="entry-note">${escapeHtml(entry.note)}</div>` : ''}
     `;
@@ -1021,8 +1100,10 @@ const settingsToggleBtn = document.getElementById('settingsToggleBtn');
 const settingsPanel = document.getElementById('settingsPanel');
 const employmentStartDateInput = document.getElementById('employmentStartDate');
 const settingsSavedNote = document.getElementById('settingsSavedNote');
+const fullNameInput = document.getElementById('fullName');
 
 if (settings.employmentStartDate) employmentStartDateInput.value = settings.employmentStartDate;
+if (settings.fullName) fullNameInput.value = settings.fullName;
 
 settingsToggleBtn.addEventListener('click', () => {
   const showing = settingsPanel.style.display !== 'none';
@@ -1036,6 +1117,11 @@ employmentStartDateInput.addEventListener('change', () => {
     ? `Zapisano. Dni przed ${formatDatePl(settings.employmentStartDate)} nie liczą się do normy.`
     : 'Zapisano (brak ograniczenia).';
   renderNormCard();
+});
+
+fullNameInput.addEventListener('change', () => {
+  settings.fullName = fullNameInput.value.trim() || null;
+  saveSettings(settings);
 });
 
 // ---------- Monthly norm ----------
@@ -1260,6 +1346,7 @@ document.getElementById('normFillBtn').addEventListener('click', () => {
 
   setActiveTypeButton('leave');
   formKind = 'leave';
+  pendingNormFillTag = true;
   updateFormFields();
 
   // "Godziny dziennie" is capped at 24h, so a large deficit has to be spread
@@ -1355,6 +1442,47 @@ document.getElementById('exportBtn').addEventListener('click', () => {
   const a = document.createElement('a');
   a.href = url;
   a.download = 'nadgodziny.json';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('exportCsvBtn').addEventListener('click', () => {
+  const header = ['Data', 'Data do', 'Dzień tygodnia', 'Typ', 'Lokalizacja', 'Start', 'Koniec', 'Przerwa (min)', 'Godziny', 'Standard (h)', 'Nadgodziny (h)', 'Dieta (zł)', 'Notatka'];
+  const rows = entries
+    .slice()
+    .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)
+    .map((entry) => {
+      const r = computeEntry(entry);
+      return [
+        entry.date,
+        entryEndDate(entry) !== entry.date ? entryEndDate(entry) : '',
+        dayOfWeekName(entry.date),
+        typeBadge(entry.type),
+        entry.type === 'work' ? (entry.location === 'trip' ? 'Teren' : 'Firma') : '',
+        entry.startTime || '',
+        entry.endTime || '',
+        entry.breakMinutes || '',
+        entry.type === 'leave' ? '' : (entry.hours || 0).toFixed(2),
+        entry.type === 'leave' ? '' : r.standard.toFixed(2),
+        entry.type === 'leave' ? `-${entry.hours.toFixed(2)}` : r.overtime.toFixed(2),
+        entry.hasDieta ? (entry.dailyAllowance || 0).toFixed(2) : '',
+        (entry.note || '').replace(/[\r\n]+/g, ' '),
+      ];
+    });
+  const csvLines = [header, ...rows].map((cols) =>
+    cols.map((v) => {
+      const s = String(v);
+      return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    }).join(';')
+  );
+  // Semicolon delimiter + UTF-8 BOM: Excel with a Polish locale expects ';'
+  // (comma is the decimal separator) and needs the BOM to show ą/ę/ł correctly.
+  const csv = '﻿' + csvLines.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'nadgodziny.csv';
   a.click();
   URL.revokeObjectURL(url);
 });

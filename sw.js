@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nadgodziny-cache-v3';
+const CACHE_NAME = 'nadgodziny-cache-v4';
 const APP_SHELL = [
   './',
   './index.html',
@@ -6,6 +6,8 @@ const APP_SHELL = [
   './css/style.css',
   './js/app.js',
   './js/pdf.js',
+  './js/sync.js',
+  './js/sync-config.js',
   './js/vendor/jspdf.umd.min.js',
   './js/vendor/pdf-fonts.js',
   './icons/icon-192.png',

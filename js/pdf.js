@@ -51,7 +51,11 @@ function pdfDrawTable(doc, startY, columns, rows) {
 
   doc.setFontSize(8.3);
   let zebra = false;
-  for (const row of rows) {
+  for (const rawRow of rows) {
+    // A row can be a plain array of cell strings, or { cells, highlight }
+    // when it needs visual emphasis (e.g. a norm-fill leave entry).
+    const row = Array.isArray(rawRow) ? rawRow : rawRow.cells;
+    const highlight = !Array.isArray(rawRow) && rawRow.highlight;
     const wrapped = row.map((cell, i) => doc.splitTextToSize(String(cell), columns[i].width - cellPad * 2));
     const lineCount = Math.max(...wrapped.map((w) => w.length), 1);
     const rowHeight = Math.max(6, lineCount * PDF_LINE_H + 1);
@@ -63,7 +67,10 @@ function pdfDrawTable(doc, startY, columns, rows) {
       doc.setFontSize(8.3);
     }
 
-    if (zebra) {
+    if (highlight) {
+      doc.setFillColor(255, 251, 235);
+      doc.rect(PDF_MARGIN, y, totalWidth, rowHeight, 'F');
+    } else if (zebra) {
       doc.setFillColor(245, 246, 248);
       doc.rect(PDF_MARGIN, y, totalWidth, rowHeight, 'F');
     }
@@ -122,6 +129,10 @@ function generatePdfReport(scopedEntries, from, to) {
   doc.setFont('DejaVuSans', 'bold');
   doc.setFontSize(16);
   doc.text('Raport czasu pracy', PDF_MARGIN, y);
+  if (typeof settings !== 'undefined' && settings.fullName) {
+    doc.setFontSize(11);
+    doc.text(settings.fullName, PDF_PAGE_W - PDF_MARGIN, y, { align: 'right' });
+  }
   y += 7;
 
   doc.setFont('DejaVuSans', 'normal');
@@ -159,21 +170,33 @@ function generatePdfReport(scopedEntries, from, to) {
         ? pdfFormatDate(entry.date)
         : `${pdfFormatDate(entry.date)}–${pdfFormatDate(entryEndDate(entry))}`;
       const locTag = entry.type === 'work' && entry.location === 'trip' ? '[Teren] ' : '';
+      const normFillTag = entry.fromNormFill ? '[Uzupełnienie normy] ' : '';
       const timeRange = entry.startTime && entry.endTime ? formatTimeRange(entry) : '';
       const dietaText = entry.hasDieta ? `dieta ${formatMoney(entry.dailyAllowance || 0)}` : '';
       const travelText = entry.travelMinutes ? `dojazd ${entry.travelMinutes} min` : '';
-      const noteCell = locTag + [timeRange, entry.note || '', dietaText, travelText, locationTextForPdf(entry)].filter(Boolean).join(' · ');
-      return [
-        dateCell,
-        dayOfWeekName(entry.date, true),
-        entry.type === 'leave' ? 'Urlop' : 'Praca',
-        entry.type === 'leave' ? '–' : entry.hours.toFixed(2),
-        entry.type === 'leave' ? '–' : r.standard.toFixed(2),
-        entry.type === 'leave' ? `-${entry.hours.toFixed(2)}` : (r.overtime > 0 ? `+${r.overtime.toFixed(2)}` : '–'),
-        noteCell,
-      ];
+      const noteCell = locTag + normFillTag + [timeRange, entry.note || '', dietaText, travelText, locationTextForPdf(entry)].filter(Boolean).join(' · ');
+      return {
+        highlight: !!entry.fromNormFill,
+        cells: [
+          dateCell,
+          dayOfWeekName(entry.date, true),
+          entry.type === 'leave' ? 'Urlop' : 'Praca',
+          entry.type === 'leave' ? '–' : entry.hours.toFixed(2),
+          entry.type === 'leave' ? '–' : r.standard.toFixed(2),
+          entry.type === 'leave' ? `-${entry.hours.toFixed(2)}` : (r.overtime > 0 ? `+${r.overtime.toFixed(2)}` : '–'),
+          noteCell,
+        ],
+      };
     });
     y = pdfDrawTable(doc, y, columns, rows);
+    if (rows.some((r) => r.highlight)) {
+      doc.setFont('DejaVuSans', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(140, 148, 158);
+      doc.text('Zaznaczone wiersze: dni urlopu użyte do uzupełnienia normy z banku nadgodzin.', PDF_MARGIN, y + 4);
+      doc.setTextColor(31, 35, 40);
+      y += 8;
+    }
     y += 8;
   }
 

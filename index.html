@@ -122,19 +122,28 @@
 
         <div class="form-row" id="manualLocationRow" style="display:none;">
           <label for="startLocationText">Trasa — start</label>
-          <div class="location-input-with-btn">
-            <input type="text" id="startLocationText" placeholder="np. Warszawa, biuro">
-            <button type="button" id="startLocationGpsBtn" class="gps-btn" title="Użyj GPS">📍</button>
+          <div class="location-field">
+            <div class="location-input-with-btn">
+              <input type="text" id="startLocationText" placeholder="np. Warszawa, biuro" autocomplete="off">
+              <button type="button" id="startLocationGpsBtn" class="gps-btn" title="Użyj GPS">📍</button>
+            </div>
+            <div class="autocomplete-list" id="startLocationAutocomplete"></div>
           </div>
           <label for="destinationLocationText" style="margin-top:8px;">Trasa — cel</label>
-          <div class="location-input-with-btn">
-            <input type="text" id="destinationLocationText" placeholder="np. Piaseczno, ul. Kwiatowa 5 — klient XYZ">
-            <button type="button" id="destinationLocationGpsBtn" class="gps-btn" title="Użyj GPS">📍</button>
+          <div class="location-field">
+            <div class="location-input-with-btn">
+              <input type="text" id="destinationLocationText" placeholder="np. Piaseczno, ul. Kwiatowa 5 — klient XYZ" autocomplete="off">
+              <button type="button" id="destinationLocationGpsBtn" class="gps-btn" title="Użyj GPS">📍</button>
+            </div>
+            <div class="autocomplete-list" id="destinationLocationAutocomplete"></div>
           </div>
           <label for="endLocationText" style="margin-top:8px;">Trasa — koniec (opcjonalnie, jeśli inne niż cel)</label>
-          <div class="location-input-with-btn">
-            <input type="text" id="endLocationText" placeholder="jeśli inna niż cel">
-            <button type="button" id="endLocationGpsBtn" class="gps-btn" title="Użyj GPS">📍</button>
+          <div class="location-field">
+            <div class="location-input-with-btn">
+              <input type="text" id="endLocationText" placeholder="jeśli inna niż cel" autocomplete="off">
+              <button type="button" id="endLocationGpsBtn" class="gps-btn" title="Użyj GPS">📍</button>
+            </div>
+            <div class="autocomplete-list" id="endLocationAutocomplete"></div>
           </div>
           <span class="location-status" id="manualLocationStatus"></span>
         </div>
@@ -160,11 +169,29 @@
         <select id="monthFilter"></select>
       </div>
 
-      <button type="button" id="settingsToggleBtn" class="link-btn">⚙️ Ustawienia (data rozpoczęcia pracy)</button>
+      <button type="button" id="settingsToggleBtn" class="link-btn">⚙️ Ustawienia</button>
       <div class="form-row" id="settingsPanel" style="display:none;">
-        <label for="employmentStartDate">Data rozpoczęcia pracy (dla liczenia normy)</label>
+        <label for="fullName">Imię i nazwisko (do raportów PDF)</label>
+        <input type="text" id="fullName" placeholder="np. Jan Kowalski" autocomplete="name">
+
+        <label for="employmentStartDate" style="margin-top:8px;">Data rozpoczęcia pracy (dla liczenia normy)</label>
         <input type="date" id="employmentStartDate">
         <span class="location-status" id="settingsSavedNote"></span>
+
+        <div class="sync-box" id="syncSection">
+          <h4>☁️ Synchronizacja między urządzeniami</h4>
+          <p class="sync-unavailable" id="syncUnavailableNote" style="display:none;">
+            Synchronizacja nieskonfigurowana — dane zostają tylko na tym urządzeniu.
+            W międzyczasie użyj „Udostępnij" / „Eksportuj" / „Importuj" poniżej.
+          </p>
+          <div id="syncLoginForm" class="sync-login-form">
+            <input type="email" id="syncEmail" placeholder="e-mail" autocomplete="username">
+            <input type="password" id="syncPassword" placeholder="hasło (min. 6 znaków)" autocomplete="current-password">
+            <button type="button" id="syncLoginBtn" class="secondary">Zaloguj / Zarejestruj</button>
+          </div>
+          <button type="button" id="syncLogoutBtn" class="secondary" style="display:none;">Wyloguj</button>
+          <p class="location-status" id="syncStatus">Niezalogowano — dane tylko na tym urządzeniu.</p>
+        </div>
       </div>
 
       <section class="norm-card" id="normCard" style="display:none;">
@@ -194,6 +221,7 @@
     <footer>
       <button id="shareBtn" class="secondary">📤 Udostępnij dane</button>
       <button id="exportBtn" class="secondary">Eksportuj dane (JSON)</button>
+      <button id="exportCsvBtn" class="secondary">Eksportuj CSV (Excel)</button>
       <label class="secondary import-label">
         Importuj dane (JSON)
         <input type="file" id="importInput" accept="application/json" hidden>
@@ -247,5 +275,10 @@
 <script src="js/vendor/pdf-fonts.js"></script>
 <script src="js/pdf.js"></script>
 <script src="js/app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="js/sync-config.js"></script>
+<script src="js/sync.js"></script>
 </body>
 </html>
