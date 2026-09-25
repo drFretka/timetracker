@@ -49,8 +49,22 @@
       </div>
     </section>
 
+    <section class="clock-card" id="clockCard">
+      <h2>Zegar pracy</h2>
+      <div class="clock-location" id="clockLocationToggle">
+        <button type="button" class="loc-btn active" data-loc="office">🏢 Firma</button>
+        <button type="button" class="loc-btn" data-loc="trip">🚗 Delegacja / w terenie</button>
+      </div>
+      <p class="clock-status" id="clockStatus">Nie rozpoczęto pracy</p>
+      <p class="clock-elapsed" id="clockElapsed" style="display:none;"></p>
+      <div class="clock-buttons" id="clockButtons">
+        <button type="button" id="clockStartBtn" class="clock-btn-start">▶ Start pracy</button>
+      </div>
+      <button type="button" id="clockCancelBtn" class="link-btn" style="display:none;">Anuluj sesję</button>
+    </section>
+
     <section class="form-section">
-      <h2>Dodaj wpis</h2>
+      <h2>Dodaj wpis ręcznie</h2>
       <form id="entryForm">
         <div class="form-row">
           <label for="type">Typ wpisu</label>
@@ -90,13 +104,17 @@
         <p class="computed-hours" id="computedHours" style="display:none;"></p>
 
         <div class="form-row" id="hoursLeaveRow" style="display:none;">
-          <label for="hoursLeave">Godziny urlopu (z nadgodzin)</label>
-          <input type="number" id="hoursLeave" step="0.25" min="0" max="24" placeholder="np. 8">
+          <label for="hoursLeavePerDay">Godziny urlopu dziennie (z nadgodzin)</label>
+          <input type="number" id="hoursLeavePerDay" step="0.25" min="0" max="24" placeholder="np. 8" value="8">
         </div>
+
+        <p class="computed-hours" id="computedLeaveHours" style="display:none;"></p>
 
         <div class="form-row" id="destinationRow" style="display:none;">
           <label for="destination">Cel podróży / miejsce</label>
           <input type="text" id="destination" placeholder="np. Warszawa - klient XYZ">
+          <button type="button" id="tripLocationBtn" class="secondary location-btn">📍 Użyj obecnej lokalizacji</button>
+          <span class="location-status" id="tripLocationStatus"></span>
         </div>
 
         <div class="form-row" id="allowanceRow" style="display:none;">

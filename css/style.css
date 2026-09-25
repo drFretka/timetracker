@@ -341,3 +341,142 @@ footer {
   cursor: pointer;
   text-align: center;
 }
+
+/* ---------- Clock card ---------- */
+
+.clock-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 18px;
+  text-align: center;
+}
+
+.clock-card h2 {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+  text-align: left;
+}
+
+.clock-location {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.loc-btn {
+  flex: 1;
+  background: var(--card-bg);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  padding: 10px 6px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  min-height: 42px;
+}
+
+.loc-btn.active {
+  background: var(--accent-light);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.clock-status {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 4px 0;
+}
+
+.clock-elapsed {
+  font-size: 2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin: 4px 0 14px;
+  color: var(--accent);
+}
+
+.clock-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.clock-btn-start {
+  background: #15803d;
+}
+
+.clock-btn-break {
+  background: var(--card-bg);
+  color: var(--overtime);
+  border: 1px solid var(--overtime);
+}
+
+.clock-btn-resume {
+  background: #15803d;
+}
+
+.clock-btn-stop {
+  background: var(--danger);
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-weight: 400;
+  font-size: 0.8rem;
+  text-decoration: underline;
+  width: auto;
+  min-height: auto;
+  padding: 10px 0 0;
+}
+
+.location-btn {
+  margin-top: 8px;
+}
+
+.location-status {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.location-link {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.entry-badge-location {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: var(--text-muted);
+  margin: 0 0 6px 6px;
+}
+
+/* ---------- Toast (NFC / punch confirmations) ---------- */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  background: #1f2328;
+  color: #fff;
+  padding: 12px 18px;
+  border-radius: 999px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  z-index: 100;
+  max-width: 90%;
+  text-align: center;
+}

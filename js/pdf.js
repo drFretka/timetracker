@@ -127,14 +127,20 @@ function generatePdfReport(scopedEntries, from, to) {
     ];
     const rows = workEntries.map((entry) => {
       const r = computeEntry(entry);
+      const dateCell = entry.date === entryEndDate(entry)
+        ? pdfFormatDate(entry.date)
+        : `${pdfFormatDate(entry.date)}–${pdfFormatDate(entryEndDate(entry))}`;
+      const locTag = entry.type === 'work' && entry.location === 'trip' ? '[Delegacja] ' : '';
+      const timeRange = entry.startTime && entry.endTime ? formatTimeRange(entry) : '';
+      const noteCell = locTag + [timeRange, entry.note || ''].filter(Boolean).join(' · ');
       return [
-        pdfFormatDate(entry.date),
+        dateCell,
         dayOfWeekName(entry.date, true),
         entry.type === 'leave' ? 'Urlop' : 'Praca',
         entry.type === 'leave' ? '–' : entry.hours.toFixed(2),
         entry.type === 'leave' ? '–' : r.standard.toFixed(2),
         entry.type === 'leave' ? `-${entry.hours.toFixed(2)}` : (r.overtime > 0 ? `+${r.overtime.toFixed(2)}` : '–'),
-        [entry.startTime && entry.endTime ? formatTimeRange(entry) : '', entry.note || ''].filter(Boolean).join(' · '),
+        noteCell,
       ];
     });
     y = pdfDrawTable(doc, y, columns, rows);
