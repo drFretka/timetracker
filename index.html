@@ -160,8 +160,16 @@
         <select id="monthFilter"></select>
       </div>
 
+      <button type="button" id="settingsToggleBtn" class="link-btn">⚙️ Ustawienia (data rozpoczęcia pracy)</button>
+      <div class="form-row" id="settingsPanel" style="display:none;">
+        <label for="employmentStartDate">Data rozpoczęcia pracy (dla liczenia normy)</label>
+        <input type="date" id="employmentStartDate">
+        <span class="location-status" id="settingsSavedNote"></span>
+      </div>
+
       <section class="norm-card" id="normCard" style="display:none;">
         <h3 id="normTitle">Norma miesięczna</h3>
+        <p class="norm-annotation" id="normAnnotation" style="display:none;"></p>
         <div class="norm-row">
           <span>Norma (dni robocze × 8h)</span>
           <strong id="normHours"></strong>
@@ -174,6 +182,7 @@
           <span>Pokryte urlopem (z nadgodzin)</span>
           <strong id="normLeave"></strong>
         </div>
+        <div class="norm-progress"><div class="norm-progress-fill" id="normProgressFill"></div></div>
         <p class="norm-status" id="normStatus"></p>
         <button type="button" id="normFillBtn" style="display:none;">Uzupełnij brakujące godziny z banku nadgodzin</button>
       </section>

@@ -23,6 +23,24 @@ function saveEntries(list) {
 
 let entries = loadEntries();
 
+// ---------- Settings (employment start date, etc.) ----------
+
+const SETTINGS_KEY = 'timetracker.settings.v1';
+
+function loadSettings() {
+  try {
+    return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveSettings(s) {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+}
+
+let settings = loadSettings();
+
 function isWeekday(dateStr) {
   const day = new Date(dateStr + 'T00:00:00').getDay();
   return day >= 1 && day <= 5;
@@ -997,6 +1015,29 @@ function refresh() {
   renderNormCard();
 }
 
+// ---------- Settings UI ----------
+
+const settingsToggleBtn = document.getElementById('settingsToggleBtn');
+const settingsPanel = document.getElementById('settingsPanel');
+const employmentStartDateInput = document.getElementById('employmentStartDate');
+const settingsSavedNote = document.getElementById('settingsSavedNote');
+
+if (settings.employmentStartDate) employmentStartDateInput.value = settings.employmentStartDate;
+
+settingsToggleBtn.addEventListener('click', () => {
+  const showing = settingsPanel.style.display !== 'none';
+  settingsPanel.style.display = showing ? 'none' : 'flex';
+});
+
+employmentStartDateInput.addEventListener('change', () => {
+  settings.employmentStartDate = employmentStartDateInput.value || null;
+  saveSettings(settings);
+  settingsSavedNote.textContent = settings.employmentStartDate
+    ? `Zapisano. Dni przed ${formatDatePl(settings.employmentStartDate)} nie liczą się do normy.`
+    : 'Zapisano (brak ograniczenia).';
+  renderNormCard();
+});
+
 // ---------- Monthly norm ----------
 
 // Caps a month's evaluation range at today when it's the current (still
@@ -1013,31 +1054,46 @@ function monthEffectiveEnd(monthStr) {
   return naturalLast;
 }
 
-function computeMonthlyNorm(monthStr) {
-  const first = `${monthStr}-01`;
-  const last = monthEffectiveEnd(monthStr);
-  if (!last) return { monthStr, normDays: 0, normHours: 0, standardWorked: 0, leaveUsedInMonth: 0, covered: 0, diff: 0 };
+// Core norm math for an explicit [rangeFirst, rangeLast] calendar range.
+// The norm (required hours) side is clipped to start no earlier than the
+// configured employment start date and end no later than today; the
+// "covered" side (actual work/leave) always uses the real calendar range.
+function computeNormForRange(rangeFirst, rangeLast) {
+  let normFirst = rangeFirst;
+  if (settings.employmentStartDate && settings.employmentStartDate > normFirst) normFirst = settings.employmentStartDate;
+  const todayStr = toIsoDate(new Date());
+  const normLast = rangeLast > todayStr ? todayStr : rangeLast;
 
-  const normDays = countNormWeekdaysInRange(first, last);
+  let normDays = 0;
+  if (normFirst <= normLast) normDays = countNormWeekdaysInRange(normFirst, normLast);
   const normHours = normDays * STANDARD_DAY_HOURS;
 
   let standardWorked = 0;
   let leaveUsedInMonth = 0;
   for (const entry of entries) {
-    if (entry.type === 'work' && entry.date >= first && entry.date <= last) {
+    if (entry.type === 'work' && entry.date >= rangeFirst && entry.date <= rangeLast) {
       standardWorked += computeEntry(entry).standard;
     } else if (entry.type === 'leave') {
       const end = entryEndDate(entry);
-      if (entry.date <= last && end >= first) {
-        const overlapStart = entry.date > first ? entry.date : first;
-        const overlapEnd = end < last ? end : last;
+      if (entry.date <= rangeLast && end >= rangeFirst) {
+        const overlapStart = entry.date > rangeFirst ? entry.date : rangeFirst;
+        const overlapEnd = end < rangeLast ? end : rangeLast;
         const weekdaysInOverlap = countWeekdaysInRange(overlapStart, overlapEnd);
         leaveUsedInMonth += weekdaysInOverlap * (entry.hoursPerDay || 0);
       }
     }
   }
   const covered = standardWorked + leaveUsedInMonth;
-  return { monthStr, normDays, normHours, standardWorked, leaveUsedInMonth, covered, diff: covered - normHours };
+  return { normDays, normHours, standardWorked, leaveUsedInMonth, covered, diff: covered - normHours };
+}
+
+function computeMonthlyNorm(monthStr) {
+  const [y, m] = monthStr.split('-').map(Number);
+  const naturalFirst = `${monthStr}-01`;
+  const naturalLast = `${monthStr}-${pad2(new Date(y, m, 0).getDate())}`;
+  const r = computeNormForRange(naturalFirst, naturalLast);
+  const startsThisMonth = !!(settings.employmentStartDate && settings.employmentStartDate.slice(0, 7) === monthStr);
+  return { monthStr, ...r, startsThisMonth };
 }
 
 // All "YYYY-MM" months from startMonthStr to endMonthStr, inclusive.
@@ -1080,13 +1136,22 @@ function computeAggregateNorm() {
     leaveUsedInMonth += n.leaveUsedInMonth;
   }
   const covered = standardWorked + leaveUsedInMonth;
+  const firstMonth = months[0];
   return {
     months,
-    firstMonth: months[0],
+    firstMonth,
     lastMonth: months[months.length - 1],
     normDays, normHours, standardWorked, leaveUsedInMonth, covered,
     diff: covered - normHours,
+    startsThisMonth: !!(settings.employmentStartDate && settings.employmentStartDate.slice(0, 7) === firstMonth),
   };
+}
+
+const MONTH_NAMES_PL = ['stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca', 'lipca', 'sierpnia', 'września', 'października', 'listopada', 'grudnia'];
+
+function formatDatePl(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return `${d} ${MONTH_NAMES_PL[m - 1]} ${y}`;
 }
 
 function lastWeekdayOnOrBefore(dateStr) {
@@ -1140,9 +1205,22 @@ function renderNormCard() {
   if (anchorDate) anchorDate = lastWeekdayOnOrBefore(anchorDate);
   normCard.style.display = 'block';
 
+  const annotationEl = document.getElementById('normAnnotation');
+  if (n.startsThisMonth && settings.employmentStartDate) {
+    annotationEl.textContent = `ℹ️ Praca od ${formatDatePl(settings.employmentStartDate)} — wcześniejsze dni nie liczą się do normy.`;
+    annotationEl.style.display = 'block';
+  } else {
+    annotationEl.style.display = 'none';
+  }
+
   document.getElementById('normHours').textContent = `${formatHours(n.normHours)}${n.normDays !== undefined ? ` (${n.normDays} dni)` : ''}`;
   document.getElementById('normWorked').textContent = formatHours(n.standardWorked);
   document.getElementById('normLeave').textContent = formatHours(n.leaveUsedInMonth);
+
+  const progressFill = document.getElementById('normProgressFill');
+  const pct = n.normHours > 0 ? Math.min(100, Math.max(0, (n.covered / n.normHours) * 100)) : (n.covered > 0 ? 100 : 0);
+  progressFill.style.width = `${pct}%`;
+  progressFill.className = 'norm-progress-fill' + (n.diff < -0.01 ? ' deficit' : (n.diff > 0.01 ? ' surplus' : ''));
 
   const statusEl = document.getElementById('normStatus');
   const overallBalance = summarize(entries).balance;

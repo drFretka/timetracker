@@ -232,11 +232,22 @@ function generatePdfReport(scopedEntries, from, to) {
   const rem = Math.abs(s.balance) % STANDARD_DAY_HOURS;
   const balanceSign = s.balance < 0 ? '-' : '';
 
+  const norm = (typeof computeNormForRange === 'function') ? computeNormForRange(from, to) : null;
+  const normDiffText = norm
+    ? (Math.abs(norm.diff) < 0.01
+      ? 'norma wyrobiona dokładnie'
+      : (norm.diff > 0 ? `nadwyżka ${formatHours(norm.diff)}` : `niedobór ${formatHours(-norm.diff)}`))
+    : null;
+
   const summaryLines = [
     ['Suma godzin przepracowanych:', formatHours(s.workedHours)],
     ['Nadgodziny wypracowane:', formatHours(s.earned)],
     ['Nadgodziny wykorzystane jako urlop:', formatHours(s.used)],
     ['Saldo nadgodzin na koniec okresu:', `${formatHours(s.balance)} (≈ ${balanceSign}${days} dni + ${rem.toFixed(2)} h)`],
+    ...(norm ? [
+      ['Norma za wybrany okres:', `${formatHours(norm.normHours)} (${norm.normDays} dni)`],
+      ['Różnica względem normy:', normDiffText],
+    ] : []),
     ['Liczba dni z dietą:', `${s.dietaDays} dni`],
     ['Suma diet:', formatMoney(s.dietaSum)],
   ];
