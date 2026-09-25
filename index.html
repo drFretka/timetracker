@@ -121,14 +121,19 @@
         <p class="computed-hours" id="computedLeaveHours" style="display:none;"></p>
 
         <div class="form-row" id="manualLocationRow" style="display:none;">
-          <label for="startLocationText">Lokalizacja — start</label>
+          <label for="startLocationText">Trasa — start</label>
           <div class="location-input-with-btn">
-            <input type="text" id="startLocationText" placeholder="np. Piaseczno, ul. Kwiatowa 5">
+            <input type="text" id="startLocationText" placeholder="np. Warszawa, biuro">
             <button type="button" id="startLocationGpsBtn" class="gps-btn" title="Użyj GPS">📍</button>
           </div>
-          <label for="endLocationText" style="margin-top:8px;">Lokalizacja — koniec (opcjonalnie)</label>
+          <label for="destinationLocationText" style="margin-top:8px;">Trasa — cel</label>
           <div class="location-input-with-btn">
-            <input type="text" id="endLocationText" placeholder="jeśli inna niż start">
+            <input type="text" id="destinationLocationText" placeholder="np. Piaseczno, ul. Kwiatowa 5 — klient XYZ">
+            <button type="button" id="destinationLocationGpsBtn" class="gps-btn" title="Użyj GPS">📍</button>
+          </div>
+          <label for="endLocationText" style="margin-top:8px;">Trasa — koniec (opcjonalnie, jeśli inne niż cel)</label>
+          <div class="location-input-with-btn">
+            <input type="text" id="endLocationText" placeholder="jeśli inna niż cel">
             <button type="button" id="endLocationGpsBtn" class="gps-btn" title="Użyj GPS">📍</button>
           </div>
           <span class="location-status" id="manualLocationStatus"></span>
@@ -154,6 +159,25 @@
         <h2>Wpisy</h2>
         <select id="monthFilter"></select>
       </div>
+
+      <section class="norm-card" id="normCard" style="display:none;">
+        <h3>Norma miesięczna — <span id="normMonthLabel"></span></h3>
+        <div class="norm-row">
+          <span>Norma (dni robocze × 8h)</span>
+          <strong id="normHours"></strong>
+        </div>
+        <div class="norm-row">
+          <span>Przepracowano standardowo</span>
+          <strong id="normWorked"></strong>
+        </div>
+        <div class="norm-row">
+          <span>Pokryte urlopem (z nadgodzin)</span>
+          <strong id="normLeave"></strong>
+        </div>
+        <p class="norm-status" id="normStatus"></p>
+        <button type="button" id="normFillBtn" style="display:none;">Uzupełnij brakujące godziny z banku nadgodzin</button>
+      </section>
+
       <div id="entriesList" class="entries-list"></div>
       <p id="emptyState" class="empty-state" style="display:none;">Brak wpisów. Dodaj pierwszy dzień pracy powyżej.</p>
     </section>

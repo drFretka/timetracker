@@ -56,6 +56,71 @@ function countWeekdaysInRange(startStr, endStr) {
   return count;
 }
 
+// ---------- Polish public holidays (for the monthly norm) ----------
+
+function easterSunday(year) {
+  // Meeus/Jones/Butcher Gregorian algorithm.
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+
+const polishHolidayCache = {};
+
+function polishHolidaysForYear(year) {
+  if (polishHolidayCache[year]) return polishHolidayCache[year];
+  const easter = easterSunday(year);
+  const plusDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+  const dates = [
+    new Date(year, 0, 1),   // Nowy Rok
+    new Date(year, 0, 6),   // Trzech Króli
+    plusDays(easter, 1),    // Poniedziałek Wielkanocny
+    new Date(year, 4, 1),   // Święto Pracy
+    new Date(year, 4, 3),   // Święto Konstytucji 3 Maja
+    plusDays(easter, 49),   // Zielone Świątki
+    plusDays(easter, 60),   // Boże Ciało
+    new Date(year, 7, 15),  // Wniebowzięcie NMP
+    new Date(year, 10, 1),  // Wszystkich Świętych
+    new Date(year, 10, 11), // Święto Niepodległości
+    new Date(year, 11, 25), // Boże Narodzenie (1. dzień)
+    new Date(year, 11, 26), // Boże Narodzenie (2. dzień)
+  ];
+  const set = new Set(dates.map(toIsoDate));
+  polishHolidayCache[year] = set;
+  return set;
+}
+
+function isPolishHoliday(dateStr) {
+  const year = parseInt(dateStr.slice(0, 4), 10);
+  return polishHolidaysForYear(year).has(dateStr);
+}
+
+// Business days for the monthly norm: Mon-Fri, excluding Polish public holidays.
+function countNormWeekdaysInRange(startStr, endStr) {
+  let count = 0;
+  const cur = new Date(startStr + 'T00:00:00');
+  const end = new Date(endStr + 'T00:00:00');
+  while (cur <= end) {
+    const day = cur.getDay();
+    const iso = toIsoDate(cur);
+    if (day >= 1 && day <= 5 && !isPolishHoliday(iso)) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
+}
+
 // Hours worked between two "HH:MM" times. Crossing midnight (end <= start) is
 // treated as a night shift ending the next day.
 function hoursBetween(startTime, endTime, breakMinutes) {
@@ -205,8 +270,10 @@ function googleMapsPointUrl(coords) {
   return `https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lon}`;
 }
 
-function googleMapsRouteUrl(from, to) {
-  return `https://www.google.com/maps/dir/?api=1&origin=${from.lat},${from.lon}&destination=${to.lat},${to.lon}`;
+function googleMapsRouteUrl(from, to, waypoint) {
+  let url = `https://www.google.com/maps/dir/?api=1&origin=${from.lat},${from.lon}&destination=${to.lat},${to.lon}`;
+  if (waypoint) url += `&waypoints=${waypoint.lat},${waypoint.lon}`;
+  return url;
 }
 
 // ---------- Tabs ----------
@@ -474,8 +541,10 @@ const dietaAmountRow = document.getElementById('dietaAmountRow');
 const workDailyAllowanceInput = document.getElementById('workDailyAllowance');
 const manualLocationRow = document.getElementById('manualLocationRow');
 const startLocationTextInput = document.getElementById('startLocationText');
+const destinationLocationTextInput = document.getElementById('destinationLocationText');
 const endLocationTextInput = document.getElementById('endLocationText');
 const startLocationGpsBtn = document.getElementById('startLocationGpsBtn');
+const destinationLocationGpsBtn = document.getElementById('destinationLocationGpsBtn');
 const endLocationGpsBtn = document.getElementById('endLocationGpsBtn');
 const manualLocationStatus = document.getElementById('manualLocationStatus');
 const travelTimeRow = document.getElementById('travelTimeRow');
@@ -495,6 +564,7 @@ const cancelEditBtn = document.getElementById('cancelEditBtn');
 let formKind = 'office'; // 'office' | 'trip' | 'leave' — mirrors the type buttons
 let formDieta = false;
 let manualStartCoords = null; // set only when the GPS button (not manual typing) captured a point
+let manualDestinationCoords = null;
 let manualEndCoords = null;
 let editingId = null; // id of the entry currently being edited, or null when adding a new one
 
@@ -596,11 +666,13 @@ async function useGpsForField(textInput, coordsSetter, btn) {
 }
 
 startLocationGpsBtn.addEventListener('click', () => useGpsForField(startLocationTextInput, (c) => { manualStartCoords = c; }, startLocationGpsBtn));
+destinationLocationGpsBtn.addEventListener('click', () => useGpsForField(destinationLocationTextInput, (c) => { manualDestinationCoords = c; }, destinationLocationGpsBtn));
 endLocationGpsBtn.addEventListener('click', () => useGpsForField(endLocationTextInput, (c) => { manualEndCoords = c; }, endLocationGpsBtn));
 
 // Typing directly (instead of using the GPS button) means we no longer have
 // a matching coordinate pair for that text, so drop any stale coords.
 startLocationTextInput.addEventListener('input', () => { manualStartCoords = null; });
+destinationLocationTextInput.addEventListener('input', () => { manualDestinationCoords = null; });
 endLocationTextInput.addEventListener('input', () => { manualEndCoords = null; });
 
 updateFormFields();
@@ -615,6 +687,7 @@ function resetForm() {
   formKind = 'office';
   formDieta = false;
   manualStartCoords = null;
+  manualDestinationCoords = null;
   manualEndCoords = null;
   setActiveTypeButton('office');
   formTitleEl.textContent = 'Dodaj wpis ręcznie';
@@ -634,6 +707,7 @@ function startEditEntry(id) {
   dateInput.value = entry.date;
   noteInput.value = entry.note || '';
   manualStartCoords = null;
+  manualDestinationCoords = null;
   manualEndCoords = null;
 
   if (entry.type === 'work') {
@@ -645,6 +719,7 @@ function startEditEntry(id) {
     dietaAmountRow.style.display = formDieta ? 'flex' : 'none';
     workDailyAllowanceInput.value = entry.dailyAllowance || '';
     startLocationTextInput.value = entry.startAddress || '';
+    destinationLocationTextInput.value = entry.destinationAddress || '';
     endLocationTextInput.value = entry.endAddress || '';
     travelMinutesInput.value = entry.travelMinutes || '';
   } else if (entry.type === 'leave') {
@@ -692,11 +767,17 @@ entryForm.addEventListener('submit', (e) => {
       if (travelMinutes > 0) entry.travelMinutes = travelMinutes;
 
       const startText = startLocationTextInput.value.trim();
+      const destinationText = destinationLocationTextInput.value.trim();
       const endText = endLocationTextInput.value.trim();
       if (startText) {
         entry.startAddress = startText;
         if (manualStartCoords) entry.startCoords = manualStartCoords;
         else if (existing && existing.startAddress === startText && existing.startCoords) entry.startCoords = existing.startCoords;
+      }
+      if (destinationText) {
+        entry.destinationAddress = destinationText;
+        if (manualDestinationCoords) entry.destinationCoords = manualDestinationCoords;
+        else if (existing && existing.destinationAddress === destinationText && existing.destinationCoords) entry.destinationCoords = existing.destinationCoords;
       }
       if (endText) {
         entry.endAddress = endText;
@@ -708,6 +789,8 @@ entryForm.addEventListener('submit', (e) => {
       // data the entry already had (e.g. captured earlier via the clock).
       if (existing.startCoords) entry.startCoords = existing.startCoords;
       if (existing.startAddress) entry.startAddress = existing.startAddress;
+      if (existing.destinationCoords) entry.destinationCoords = existing.destinationCoords;
+      if (existing.destinationAddress) entry.destinationAddress = existing.destinationAddress;
       if (existing.endCoords) entry.endCoords = existing.endCoords;
       if (existing.endAddress) entry.endAddress = existing.endAddress;
     }
@@ -763,14 +846,27 @@ function locationLinksHtml(entry) {
     const mapLink = entry.startCoords ? ` — <a class="location-link" href="${googleMapsPointUrl(entry.startCoords)}" target="_blank" rel="noopener">mapa</a>` : '';
     parts.push(`📍 ${label}: ${escapeHtml(text)}${mapLink}`);
   }
+  if (entry.destinationAddress || entry.destinationCoords) {
+    const text = entry.destinationAddress || `${entry.destinationCoords.lat.toFixed(5)}, ${entry.destinationCoords.lon.toFixed(5)}`;
+    const mapLink = entry.destinationCoords ? ` — <a class="location-link" href="${googleMapsPointUrl(entry.destinationCoords)}" target="_blank" rel="noopener">mapa</a>` : '';
+    parts.push(`📍 Cel: ${escapeHtml(text)}${mapLink}`);
+  }
   if (entry.endAddress || entry.endCoords) {
     const text = entry.endAddress || `${entry.endCoords.lat.toFixed(5)}, ${entry.endCoords.lon.toFixed(5)}`;
     const mapLink = entry.endCoords ? ` — <a class="location-link" href="${googleMapsPointUrl(entry.endCoords)}" target="_blank" rel="noopener">mapa</a>` : '';
     parts.push(`📍 Koniec: ${escapeHtml(text)}${mapLink}`);
   }
-  if (entry.startCoords && entry.endCoords) {
-    const km = haversineKm(entry.startCoords, entry.endCoords);
-    parts.push(`Odległość w linii prostej: ~${km.toFixed(1)} km — <a class="location-link" href="${googleMapsRouteUrl(entry.startCoords, entry.endCoords)}" target="_blank" rel="noopener">trasa w Google Maps</a>`);
+
+  // Route link: prefer start→end with cel as a waypoint; fall back to
+  // whichever pair of points is actually available.
+  const points = [entry.startCoords, entry.destinationCoords, entry.endCoords].filter(Boolean);
+  if (points.length >= 2) {
+    const from = points[0];
+    const to = points[points.length - 1];
+    const waypoint = points.length === 3 ? points[1] : null;
+    let km = haversineKm(points[0], points[1]);
+    if (points[2]) km += haversineKm(points[1], points[2]);
+    parts.push(`Odległość w linii prostej: ~${km.toFixed(1)} km — <a class="location-link" href="${googleMapsRouteUrl(from, to, waypoint)}" target="_blank" rel="noopener">trasa w Google Maps</a>`);
   }
   if (parts.length === 0) return '';
   return `<div class="entry-note">${parts.join('<br>')}</div>`;
@@ -891,13 +987,135 @@ function renderSummary() {
 document.getElementById('monthFilter').addEventListener('change', () => {
   renderEntriesList();
   renderSummary();
+  renderNormCard();
 });
 
 function refresh() {
   populateMonthFilter();
   renderEntriesList();
   renderSummary();
+  renderNormCard();
 }
+
+// ---------- Monthly norm ----------
+
+function computeMonthlyNorm(monthStr) {
+  const [y, m] = monthStr.split('-').map(Number);
+  const first = `${monthStr}-01`;
+  const lastDay = new Date(y, m, 0).getDate();
+  const last = `${monthStr}-${pad2(lastDay)}`;
+  const normDays = countNormWeekdaysInRange(first, last);
+  const normHours = normDays * STANDARD_DAY_HOURS;
+
+  let standardWorked = 0;
+  let leaveUsedInMonth = 0;
+  for (const entry of entries) {
+    if (entry.type === 'work' && entry.date >= first && entry.date <= last) {
+      standardWorked += computeEntry(entry).standard;
+    } else if (entry.type === 'leave') {
+      const end = entryEndDate(entry);
+      if (entry.date <= last && end >= first) {
+        const overlapStart = entry.date > first ? entry.date : first;
+        const overlapEnd = end < last ? end : last;
+        const weekdaysInOverlap = countWeekdaysInRange(overlapStart, overlapEnd);
+        leaveUsedInMonth += weekdaysInOverlap * (entry.hoursPerDay || 0);
+      }
+    }
+  }
+  const covered = standardWorked + leaveUsedInMonth;
+  return { monthStr, normDays, normHours, standardWorked, leaveUsedInMonth, covered, diff: covered - normHours };
+}
+
+function lastWeekdayOfMonth(monthStr) {
+  const [y, m] = monthStr.split('-').map(Number);
+  const d = new Date(y, m - 1, new Date(y, m, 0).getDate());
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
+  return toIsoDate(d);
+}
+
+// Walks backward from endDateStr counting weekdays until weekdayCount are
+// included (endDateStr itself counts as one), returning the start date.
+function findStartDateForWeekdayCount(endDateStr, weekdayCount) {
+  const d = new Date(endDateStr + 'T00:00:00');
+  let remaining = weekdayCount;
+  while (remaining > 1) {
+    d.setDate(d.getDate() - 1);
+    if (d.getDay() >= 1 && d.getDay() <= 5) remaining--;
+  }
+  return toIsoDate(d);
+}
+
+function renderNormCard() {
+  const monthFilter = document.getElementById('monthFilter').value;
+  const normCard = document.getElementById('normCard');
+  const fillBtn = document.getElementById('normFillBtn');
+  if (!monthFilter) { normCard.style.display = 'none'; return; }
+
+  const n = computeMonthlyNorm(monthFilter);
+  normCard.style.display = 'block';
+
+  const [y, m] = monthFilter.split('-');
+  document.getElementById('normMonthLabel').textContent = `${m}/${y}`;
+  document.getElementById('normHours').textContent = `${formatHours(n.normHours)} (${n.normDays} dni)`;
+  document.getElementById('normWorked').textContent = formatHours(n.standardWorked);
+  document.getElementById('normLeave').textContent = formatHours(n.leaveUsedInMonth);
+
+  const statusEl = document.getElementById('normStatus');
+  const overallBalance = summarize(entries).balance;
+
+  if (Math.abs(n.diff) < 0.01) {
+    statusEl.textContent = '✅ Norma dokładnie wyrobiona.';
+    statusEl.className = 'norm-status ok';
+    fillBtn.style.display = 'none';
+  } else if (n.diff > 0) {
+    statusEl.textContent = `✅ Norma wyrobiona, nadwyżka ${formatHours(n.diff)} (liczy się osobno jako nadgodziny).`;
+    statusEl.className = 'norm-status surplus';
+    fillBtn.style.display = 'none';
+  } else {
+    const deficit = -n.diff;
+    statusEl.textContent = `⚠️ Brakuje ${formatHours(deficit)} do normy.`;
+    statusEl.className = 'norm-status deficit';
+    // The hours-per-day field has step="0.25"; a value that doesn't line up
+    // with that step fails silent HTML5 validation (no error, no dialog —
+    // the submit event just never fires), so round down to a safe multiple.
+    const fillAmount = Math.floor(Math.min(deficit, overallBalance) * 4) / 4;
+    if (fillAmount >= 0.25) {
+      fillBtn.style.display = 'block';
+      fillBtn.textContent = `Uzupełnij ${formatHours(fillAmount)} z banku nadgodzin`;
+      fillBtn.dataset.deficit = fillAmount.toFixed(2);
+      fillBtn.dataset.month = monthFilter;
+    } else {
+      fillBtn.style.display = 'none';
+    }
+  }
+}
+
+document.getElementById('normFillBtn').addEventListener('click', () => {
+  const btn = document.getElementById('normFillBtn');
+  const deficit = parseFloat(btn.dataset.deficit);
+  const monthStr = btn.dataset.month;
+  if (!deficit || !monthStr) return;
+
+  setActiveTypeButton('leave');
+  formKind = 'leave';
+  updateFormFields();
+
+  // "Godziny dziennie" is capped at 24h, so a large deficit has to be spread
+  // over several weekdays instead of crammed into one day's field.
+  const endDate = lastWeekdayOfMonth(monthStr);
+  const maxPerDay = STANDARD_DAY_HOURS;
+  const days = Math.max(1, Math.ceil(deficit / maxPerDay));
+  const perDay = Math.floor((deficit / days) * 4) / 4; // round down to a 0.25 step, never overshoots the deficit/balance
+  const startDate = findStartDateForWeekdayCount(endDate, days);
+
+  dateInput.value = startDate;
+  endDateInput.value = days > 1 ? endDate : '';
+  hoursLeavePerDayInput.value = perDay.toFixed(2);
+  noteInput.value = 'Uzupełnienie normy miesięcznej z banku nadgodzin';
+  updateComputedLeavePreview();
+  document.getElementById('formTitle').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  showToast('Sprawdź datę i zatwierdź formularz, aby uzupełnić brakujące godziny.');
+});
 
 // ---------- Report tab ----------
 

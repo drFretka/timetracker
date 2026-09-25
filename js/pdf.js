@@ -104,6 +104,10 @@ function locationTextForPdf(entry) {
     const text = entry.startAddress ? shortAddress(entry.startAddress, 2) : `${entry.startCoords.lat.toFixed(5)}, ${entry.startCoords.lon.toFixed(5)}`;
     parts.push(`${label}: ${text}`);
   }
+  if (entry.destinationAddress || entry.destinationCoords) {
+    const text = entry.destinationAddress ? shortAddress(entry.destinationAddress, 2) : `${entry.destinationCoords.lat.toFixed(5)}, ${entry.destinationCoords.lon.toFixed(5)}`;
+    parts.push(`Cel: ${text}`);
+  }
   if (entry.endAddress || entry.endCoords) {
     const text = entry.endAddress ? shortAddress(entry.endAddress, 2) : `${entry.endCoords.lat.toFixed(5)}, ${entry.endCoords.lon.toFixed(5)}`;
     parts.push(`Koniec: ${text}`);

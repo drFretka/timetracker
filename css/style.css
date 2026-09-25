@@ -517,6 +517,51 @@ footer {
   border: 1px solid var(--accent);
 }
 
+/* ---------- Monthly norm card ---------- */
+
+.norm-card {
+  background: var(--accent-light);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+
+.norm-card h3 {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+}
+
+.norm-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  padding: 3px 0;
+}
+
+.norm-status {
+  margin: 10px 0 0;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.norm-status.ok {
+  color: var(--leave);
+}
+
+.norm-status.deficit {
+  color: var(--danger);
+}
+
+.norm-status.surplus {
+  color: var(--overtime);
+}
+
+#normFillBtn {
+  margin-top: 10px;
+  background: #b45309;
+}
+
 /* ---------- Toast (NFC / punch confirmations) ---------- */
 
 .toast {
