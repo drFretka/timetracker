@@ -439,6 +439,15 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch((err) => console.warn('SW registration failed', err));
   });
+  // Reload once when a new service worker takes over, so updates (new
+  // features, fixes) appear automatically instead of staying stuck on an
+  // old cached version.
+  let reloadedForUpdate = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloadedForUpdate) return;
+    reloadedForUpdate = true;
+    location.reload();
+  });
 }
 
 // ---------- Init ----------
