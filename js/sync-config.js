@@ -11,10 +11,10 @@
 // lokalnie na danym urządzeniu.
 
 const FIREBASE_CONFIG = {
-  apiKey: 'WKLEJ_TUTAJ',
-  authDomain: 'WKLEJ_TUTAJ',
-  projectId: 'WKLEJ_TUTAJ',
-  storageBucket: 'WKLEJ_TUTAJ',
-  messagingSenderId: 'WKLEJ_TUTAJ',
-  appId: 'WKLEJ_TUTAJ',
+  apiKey: 'AIzaSyDbWwIbPzAasSwT3TqQrqJqX5gRlWOA-tI',
+  authDomain: 'godziny-pracy-d9dd0.firebaseapp.com',
+  projectId: 'godziny-pracy-d9dd0',
+  storageBucket: 'godziny-pracy-d9dd0.firebasestorage.app',
+  messagingSenderId: '174778585840',
+  appId: '1:174778585840:web:e6991e44589ecc40dc6835',
 };
