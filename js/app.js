@@ -807,9 +807,29 @@ document.getElementById('importInput').addEventListener('change', (e) => {
     try {
       const imported = JSON.parse(reader.result);
       if (!Array.isArray(imported)) throw new Error('Nieprawidłowy format');
-      entries = imported;
+
+      if (entries.length === 0) {
+        entries = imported;
+      } else {
+        const wantsMerge = confirm(
+          `Plik zawiera ${imported.length} wpis(ów), masz już ${entries.length} w aplikacji.\n\n` +
+          `OK = DODAJ nowe wpisy do istniejących (zalecane).\n` +
+          `Anuluj = ZASTĄP całą bazę tym plikiem (usunie obecne dane!).`
+        );
+        if (wantsMerge) {
+          const existingIds = new Set(entries.map((x) => x.id));
+          const incoming = imported.map((x) => (existingIds.has(x.id) ? { ...x, id: Date.now() + Math.floor(Math.random() * 1000) } : x));
+          entries = entries.concat(incoming);
+        } else {
+          if (!confirm('Na pewno zastąpić WSZYSTKIE obecne wpisy zawartością tego pliku? Tej operacji nie można cofnąć.')) {
+            return;
+          }
+          entries = imported;
+        }
+      }
       saveEntries(entries);
       refresh();
+      showToast(`Zaimportowano ${imported.length} wpis(ów).`);
     } catch (err) {
       alert('Nie udało się zaimportować pliku: ' + err.message);
     }
@@ -820,23 +840,34 @@ document.getElementById('importInput').addEventListener('change', (e) => {
 
 // Native share sheet (Bluetooth / Nearby Share / dysk / e-mail…) — works
 // fully offline device-to-device via Bluetooth or Nearby Share, no server
-// or FTP needed to move data from the phone to a computer.
+// or FTP needed to move data from the phone to a computer. Always shown
+// (rather than hidden behind feature detection, which could itself fail
+// silently on some browsers) — falls back to a plain download when the
+// OS share sheet isn't available.
 const shareBtn = document.getElementById('shareBtn');
-(() => {
-  try {
-    const testFile = new File(['{}'], 'test.json', { type: 'application/json' });
-    if (navigator.canShare && navigator.canShare({ files: [testFile] })) {
-      shareBtn.style.display = '';
-    }
-  } catch (e) { /* Web Share API with files not supported — keep button hidden */ }
-})();
 
 shareBtn.addEventListener('click', async () => {
   const blob = new Blob([JSON.stringify(entries, null, 2)], { type: 'application/json' });
-  const file = new File([blob], `nadgodziny-${toIsoDate(new Date())}.json`, { type: 'application/json' });
+  const filename = `nadgodziny-${toIsoDate(new Date())}.json`;
+  let shared = false;
   try {
-    await navigator.share({ files: [file], title: 'Dane czasu pracy', text: 'Eksport danych z Kalkulatora nadgodzin' });
-  } catch (e) { /* user cancelled the share sheet — nothing to do */ }
+    const file = new File([blob], filename, { type: 'application/json' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'Dane czasu pracy', text: 'Eksport danych z Kalkulatora nadgodzin' });
+      shared = true;
+    }
+  } catch (e) {
+    if (e && e.name === 'AbortError') return; // user closed the share sheet — do nothing
+  }
+  if (!shared) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Udostępnianie niedostępne w tej przeglądarce — plik pobrany zamiast tego.');
+  }
 });
 
 // ---------- PWA service worker ----------
