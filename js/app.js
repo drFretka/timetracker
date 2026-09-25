@@ -999,11 +999,25 @@ function refresh() {
 
 // ---------- Monthly norm ----------
 
-function computeMonthlyNorm(monthStr) {
+// Caps a month's evaluation range at today when it's the current (still
+// running) month, so an unfinished month never shows a false deficit for
+// days that haven't happened yet. Returns null for a month entirely in the
+// future.
+function monthEffectiveEnd(monthStr) {
   const [y, m] = monthStr.split('-').map(Number);
+  const naturalLast = `${monthStr}-${pad2(new Date(y, m, 0).getDate())}`;
+  const todayStr = toIsoDate(new Date());
+  const todayMonth = todayStr.slice(0, 7);
+  if (monthStr > todayMonth) return null;
+  if (monthStr === todayMonth) return todayStr < naturalLast ? todayStr : naturalLast;
+  return naturalLast;
+}
+
+function computeMonthlyNorm(monthStr) {
   const first = `${monthStr}-01`;
-  const lastDay = new Date(y, m, 0).getDate();
-  const last = `${monthStr}-${pad2(lastDay)}`;
+  const last = monthEffectiveEnd(monthStr);
+  if (!last) return { monthStr, normDays: 0, normHours: 0, standardWorked: 0, leaveUsedInMonth: 0, covered: 0, diff: 0 };
+
   const normDays = countNormWeekdaysInRange(first, last);
   const normHours = normDays * STANDARD_DAY_HOURS;
 
@@ -1026,15 +1040,69 @@ function computeMonthlyNorm(monthStr) {
   return { monthStr, normDays, normHours, standardWorked, leaveUsedInMonth, covered, diff: covered - normHours };
 }
 
-function lastWeekdayOfMonth(monthStr) {
-  const [y, m] = monthStr.split('-').map(Number);
-  const d = new Date(y, m - 1, new Date(y, m, 0).getDate());
+// All "YYYY-MM" months from startMonthStr to endMonthStr, inclusive.
+function monthsBetween(startMonthStr, endMonthStr) {
+  const result = [];
+  let [y, m] = startMonthStr.split('-').map(Number);
+  const [ey, em] = endMonthStr.split('-').map(Number);
+  while (y < ey || (y === ey && m <= em)) {
+    result.push(`${y}-${pad2(m)}`);
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+  return result;
+}
+
+// Every month touched by a work entry, or by a leave entry's date range
+// (multi-day leave can span a month boundary). Legacy multi-day "trip"
+// entries are deliberately excluded — they don't count toward the norm.
+function distinctMonthsWithData() {
+  const months = new Set();
+  for (const entry of entries) {
+    if (entry.type === 'work') {
+      months.add(entry.date.slice(0, 7));
+    } else if (entry.type === 'leave') {
+      for (const mo of monthsBetween(entry.date.slice(0, 7), entryEndDate(entry).slice(0, 7))) months.add(mo);
+    }
+  }
+  return Array.from(months).sort();
+}
+
+function computeAggregateNorm() {
+  const months = distinctMonthsWithData();
+  if (months.length === 0) return null;
+  let normDays = 0, normHours = 0, standardWorked = 0, leaveUsedInMonth = 0;
+  for (const mo of months) {
+    const n = computeMonthlyNorm(mo);
+    normDays += n.normDays;
+    normHours += n.normHours;
+    standardWorked += n.standardWorked;
+    leaveUsedInMonth += n.leaveUsedInMonth;
+  }
+  const covered = standardWorked + leaveUsedInMonth;
+  return {
+    months,
+    firstMonth: months[0],
+    lastMonth: months[months.length - 1],
+    normDays, normHours, standardWorked, leaveUsedInMonth, covered,
+    diff: covered - normHours,
+  };
+}
+
+function lastWeekdayOnOrBefore(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
   while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
   return toIsoDate(d);
 }
 
+function lastWeekdayOfMonth(monthStr) {
+  const [y, m] = monthStr.split('-').map(Number);
+  return lastWeekdayOnOrBefore(`${monthStr}-${pad2(new Date(y, m, 0).getDate())}`);
+}
+
 // Walks backward from endDateStr counting weekdays until weekdayCount are
 // included (endDateStr itself counts as one), returning the start date.
+// endDateStr must already be a weekday.
 function findStartDateForWeekdayCount(endDateStr, weekdayCount) {
   const d = new Date(endDateStr + 'T00:00:00');
   let remaining = weekdayCount;
@@ -1045,18 +1113,34 @@ function findStartDateForWeekdayCount(endDateStr, weekdayCount) {
   return toIsoDate(d);
 }
 
+function formatMonthLabel(monthStr) {
+  const [y, m] = monthStr.split('-');
+  return `${m}/${y}`;
+}
+
 function renderNormCard() {
   const monthFilter = document.getElementById('monthFilter').value;
   const normCard = document.getElementById('normCard');
   const fillBtn = document.getElementById('normFillBtn');
-  if (!monthFilter) { normCard.style.display = 'none'; return; }
+  const titleEl = document.getElementById('normTitle');
 
-  const n = computeMonthlyNorm(monthFilter);
+  let n, anchorDate;
+  if (monthFilter) {
+    n = computeMonthlyNorm(monthFilter);
+    titleEl.textContent = `Norma miesięczna — ${formatMonthLabel(monthFilter)}`;
+    anchorDate = monthEffectiveEnd(monthFilter);
+  } else {
+    n = computeAggregateNorm();
+    if (!n) { normCard.style.display = 'none'; return; }
+    titleEl.textContent = n.firstMonth === n.lastMonth
+      ? `Norma za cały okres — ${formatMonthLabel(n.firstMonth)}`
+      : `Norma za cały okres — ${formatMonthLabel(n.firstMonth)} – ${formatMonthLabel(n.lastMonth)} (${n.months.length} mies.)`;
+    anchorDate = monthEffectiveEnd(n.lastMonth);
+  }
+  if (anchorDate) anchorDate = lastWeekdayOnOrBefore(anchorDate);
   normCard.style.display = 'block';
 
-  const [y, m] = monthFilter.split('-');
-  document.getElementById('normMonthLabel').textContent = `${m}/${y}`;
-  document.getElementById('normHours').textContent = `${formatHours(n.normHours)} (${n.normDays} dni)`;
+  document.getElementById('normHours').textContent = `${formatHours(n.normHours)}${n.normDays !== undefined ? ` (${n.normDays} dni)` : ''}`;
   document.getElementById('normWorked').textContent = formatHours(n.standardWorked);
   document.getElementById('normLeave').textContent = formatHours(n.leaveUsedInMonth);
 
@@ -1079,11 +1163,11 @@ function renderNormCard() {
     // with that step fails silent HTML5 validation (no error, no dialog —
     // the submit event just never fires), so round down to a safe multiple.
     const fillAmount = Math.floor(Math.min(deficit, overallBalance) * 4) / 4;
-    if (fillAmount >= 0.25) {
+    if (fillAmount >= 0.25 && anchorDate) {
       fillBtn.style.display = 'block';
       fillBtn.textContent = `Uzupełnij ${formatHours(fillAmount)} z banku nadgodzin`;
       fillBtn.dataset.deficit = fillAmount.toFixed(2);
-      fillBtn.dataset.month = monthFilter;
+      fillBtn.dataset.anchor = anchorDate;
     } else {
       fillBtn.style.display = 'none';
     }
@@ -1093,8 +1177,8 @@ function renderNormCard() {
 document.getElementById('normFillBtn').addEventListener('click', () => {
   const btn = document.getElementById('normFillBtn');
   const deficit = parseFloat(btn.dataset.deficit);
-  const monthStr = btn.dataset.month;
-  if (!deficit || !monthStr) return;
+  const endDate = btn.dataset.anchor;
+  if (!deficit || !endDate) return;
 
   setActiveTypeButton('leave');
   formKind = 'leave';
@@ -1102,7 +1186,6 @@ document.getElementById('normFillBtn').addEventListener('click', () => {
 
   // "Godziny dziennie" is capped at 24h, so a large deficit has to be spread
   // over several weekdays instead of crammed into one day's field.
-  const endDate = lastWeekdayOfMonth(monthStr);
   const maxPerDay = STANDARD_DAY_HOURS;
   const days = Math.max(1, Math.ceil(deficit / maxPerDay));
   const perDay = Math.floor((deficit / days) * 4) / 4; // round down to a 0.25 step, never overshoots the deficit/balance
@@ -1111,7 +1194,7 @@ document.getElementById('normFillBtn').addEventListener('click', () => {
   dateInput.value = startDate;
   endDateInput.value = days > 1 ? endDate : '';
   hoursLeavePerDayInput.value = perDay.toFixed(2);
-  noteInput.value = 'Uzupełnienie normy miesięcznej z banku nadgodzin';
+  noteInput.value = 'Uzupełnienie normy z banku nadgodzin';
   updateComputedLeavePreview();
   document.getElementById('formTitle').scrollIntoView({ behavior: 'smooth', block: 'start' });
   showToast('Sprawdź datę i zatwierdź formularz, aby uzupełnić brakujące godziny.');
