@@ -504,9 +504,13 @@ tripLocationBtn.addEventListener('click', async () => {
   }
   tripCapturedLocation = result;
   if (result.address) destinationInput.value = result.address;
-  tripLocationStatus.textContent = result.address
-    ? `Ustawiono: ${result.address}`
-    : `Współrzędne: ${result.coords.lat.toFixed(5)}, ${result.coords.lon.toFixed(5)}`;
+  if (result.address) {
+    tripLocationStatus.textContent = `Ustawiono: ${result.address}`;
+  } else if (!navigator.onLine) {
+    tripLocationStatus.textContent = `Brak internetu — zapisano współrzędne (${result.coords.lat.toFixed(5)}, ${result.coords.lon.toFixed(5)}), adres uzupełni się automatycznie po powrocie zasięgu.`;
+  } else {
+    tripLocationStatus.textContent = `Współrzędne: ${result.coords.lat.toFixed(5)}, ${result.coords.lon.toFixed(5)}`;
+  }
 });
 
 typeSelect.addEventListener('change', updateFormFields);
@@ -814,6 +818,27 @@ document.getElementById('importInput').addEventListener('change', (e) => {
   e.target.value = '';
 });
 
+// Native share sheet (Bluetooth / Nearby Share / dysk / e-mail…) — works
+// fully offline device-to-device via Bluetooth or Nearby Share, no server
+// or FTP needed to move data from the phone to a computer.
+const shareBtn = document.getElementById('shareBtn');
+(() => {
+  try {
+    const testFile = new File(['{}'], 'test.json', { type: 'application/json' });
+    if (navigator.canShare && navigator.canShare({ files: [testFile] })) {
+      shareBtn.style.display = '';
+    }
+  } catch (e) { /* Web Share API with files not supported — keep button hidden */ }
+})();
+
+shareBtn.addEventListener('click', async () => {
+  const blob = new Blob([JSON.stringify(entries, null, 2)], { type: 'application/json' });
+  const file = new File([blob], `nadgodziny-${toIsoDate(new Date())}.json`, { type: 'application/json' });
+  try {
+    await navigator.share({ files: [file], title: 'Dane czasu pracy', text: 'Eksport danych z Kalkulatora nadgodzin' });
+  } catch (e) { /* user cancelled the share sheet — nothing to do */ }
+});
+
 // ---------- PWA service worker ----------
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
@@ -855,9 +880,45 @@ function handleUrlPunch() {
   }
 }
 
+// ---------- Fill in missing addresses once back online ----------
+// GPS coordinates are always saved immediately (works fully offline, since
+// the phone's GPS chip needs no signal or network). Turning them into a
+// readable address needs internet, so entries captured offline keep only
+// raw coordinates until this runs successfully.
+
+let geocodeRetryRunning = false;
+
+async function retryPendingGeocoding() {
+  if (geocodeRetryRunning || !navigator.onLine) return;
+  const pending = entries.filter(
+    (e) => (e.startCoords && !e.startAddress) || (e.endCoords && !e.endAddress)
+  );
+  if (pending.length === 0) return;
+  geocodeRetryRunning = true;
+  let changed = false;
+  for (const entry of pending) {
+    if (entry.startCoords && !entry.startAddress) {
+      const address = await reverseGeocode(entry.startCoords.lat, entry.startCoords.lon, 5000);
+      if (address) { entry.startAddress = address; changed = true; }
+    }
+    if (entry.endCoords && !entry.endAddress) {
+      const address = await reverseGeocode(entry.endCoords.lat, entry.endCoords.lon, 5000);
+      if (address) { entry.endAddress = address; changed = true; }
+    }
+  }
+  geocodeRetryRunning = false;
+  if (changed) {
+    saveEntries(entries);
+    refresh();
+  }
+}
+
+window.addEventListener('online', retryPendingGeocoding);
+
 // ---------- Init ----------
 
 setDefaultReportRange();
 refresh();
 renderClock();
 handleUrlPunch();
+setTimeout(retryPendingGeocoding, 2000);
