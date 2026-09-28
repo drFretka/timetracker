@@ -18,7 +18,7 @@
 <div class="app">
   <header>
     <h1>Kalkulator nadgodzin</h1>
-    <p class="subtitle">Pon–pt, powyżej 8h dziennie = nadgodziny. Nadgodziny nie są płatne, ale można je wykorzystać jako urlop.</p>
+    <p class="subtitle">Pon–pt, powyżej 8h dziennie = nadgodziny. Nadgodziny nie są płatne, ale można je odebrać jako czas wolny (odbiór nadgodzin).</p>
   </header>
 
   <nav class="tabs" id="tabs">
@@ -34,7 +34,7 @@
         <span class="summary-value" id="sumOvertimeEarned">0.00 h</span>
       </div>
       <div class="summary-card">
-        <span class="summary-label">Wykorzystane jako urlop</span>
+        <span class="summary-label">Odebrane jako czas wolny</span>
         <span class="summary-value" id="sumOvertimeUsed">0.00 h</span>
       </div>
       <div class="summary-card highlight">
@@ -75,7 +75,7 @@
           <div class="type-buttons" id="typeButtons">
             <button type="button" class="type-btn active" data-type="office">🏢 Firma</button>
             <button type="button" class="type-btn" data-type="trip">🚗 Teren</button>
-            <button type="button" class="type-btn" data-type="leave">🏖️ Urlop</button>
+            <button type="button" class="type-btn" data-type="leave">⏱️ Odbiór nadgodzin</button>
           </div>
         </div>
 
@@ -91,7 +91,7 @@
         </div>
 
         <div class="form-row" id="endDateRow" style="display:none;">
-          <label for="endDate">Data zakończenia (jeśli urlop wielodniowy)</label>
+          <label for="endDate">Data zakończenia (jeśli odbiór wielodniowy)</label>
           <input type="date" id="endDate">
         </div>
 
@@ -114,7 +114,7 @@
         <p class="computed-hours" id="computedHours" style="display:none;"></p>
 
         <div class="form-row" id="hoursLeaveRow" style="display:none;">
-          <label for="hoursLeavePerDay">Godziny urlopu dziennie (z nadgodzin)</label>
+          <label for="hoursLeavePerDay">Godziny odbioru dziennie (z nadgodzin)</label>
           <input type="number" id="hoursLeavePerDay" step="0.25" min="0" max="24" placeholder="np. 8" value="8">
         </div>
 
@@ -206,7 +206,7 @@
           <strong id="normWorked"></strong>
         </div>
         <div class="norm-row">
-          <span>Pokryte urlopem (z nadgodzin)</span>
+          <span>Pokryte odbiorem (z nadgodzin)</span>
           <strong id="normLeave"></strong>
         </div>
         <div class="norm-progress"><div class="norm-progress-fill" id="normProgressFill"></div></div>
@@ -255,7 +255,7 @@
         <span class="summary-value" id="repOvertimeEarned">0.00 h</span>
       </div>
       <div class="summary-card">
-        <span class="summary-label">Wykorzystane jako urlop</span>
+        <span class="summary-label">Odebrane jako czas wolny</span>
         <span class="summary-value" id="repOvertimeUsed">0.00 h</span>
       </div>
       <div class="summary-card highlight">

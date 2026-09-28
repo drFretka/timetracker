@@ -152,7 +152,7 @@ function generatePdfReport(scopedEntries, from, to) {
   if (workEntries.length > 0) {
     doc.setFont('DejaVuSans', 'bold');
     doc.setFontSize(12);
-    doc.text('Dni pracy i urlop z nadgodzin', PDF_MARGIN, y);
+    doc.text('Dni pracy i odbiór nadgodzin', PDF_MARGIN, y);
     y += 5;
 
     const columns = [
@@ -180,7 +180,7 @@ function generatePdfReport(scopedEntries, from, to) {
         cells: [
           dateCell,
           dayOfWeekName(entry.date, true),
-          entry.type === 'leave' ? 'Urlop' : 'Praca',
+          entry.type === 'leave' ? 'Odbiór' : 'Praca',
           entry.type === 'leave' ? '–' : entry.hours.toFixed(2),
           entry.type === 'leave' ? '–' : r.standard.toFixed(2),
           entry.type === 'leave' ? `-${entry.hours.toFixed(2)}` : (r.overtime > 0 ? `+${r.overtime.toFixed(2)}` : '–'),
@@ -193,7 +193,7 @@ function generatePdfReport(scopedEntries, from, to) {
       doc.setFont('DejaVuSans', 'normal');
       doc.setFontSize(8);
       doc.setTextColor(140, 148, 158);
-      doc.text('Zaznaczone wiersze: dni urlopu użyte do uzupełnienia normy z banku nadgodzin.', PDF_MARGIN, y + 4);
+      doc.text('Zaznaczone wiersze: dni odbioru nadgodzin użyte do uzupełnienia normy z banku nadgodzin.', PDF_MARGIN, y + 4);
       doc.setTextColor(31, 35, 40);
       y += 8;
     }
@@ -265,7 +265,7 @@ function generatePdfReport(scopedEntries, from, to) {
   const summaryLines = [
     ['Suma godzin przepracowanych:', formatHours(s.workedHours)],
     ['Nadgodziny wypracowane:', formatHours(s.earned)],
-    ['Nadgodziny wykorzystane jako urlop:', formatHours(s.used)],
+    ['Nadgodziny wykorzystane (odbiór):', formatHours(s.used)],
     ['Saldo nadgodzin na koniec okresu:', `${formatHours(s.balance)} (≈ ${balanceSign}${days} dni + ${rem.toFixed(2)} h)`],
     ...(norm ? [
       ['Norma za wybrany okres:', `${formatHours(norm.normHours)} (${norm.normDays} dni)`],

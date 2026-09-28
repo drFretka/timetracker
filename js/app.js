@@ -889,7 +889,7 @@ entryForm.addEventListener('submit', (e) => {
     const endDate = endDateInput.value || date;
     if (endDate < date) { alert('Data zakończenia nie może być wcześniejsza niż data rozpoczęcia.'); return; }
     const perDay = parseFloat(hoursLeavePerDayInput.value);
-    if (isNaN(perDay) || perDay <= 0) { alert('Podaj poprawną liczbę godzin urlopu dziennie.'); return; }
+    if (isNaN(perDay) || perDay <= 0) { alert('Podaj poprawną liczbę godzin odbioru dziennie.'); return; }
     const weekdays = countWeekdaysInRange(date, endDate);
     if (weekdays === 0) { alert('Wybrany zakres dat nie zawiera dni roboczych.'); return; }
     entry.endDate = endDate;
@@ -995,7 +995,7 @@ function entryDetailHtml(entry) {
 }
 
 function typeBadge(type) {
-  if (type === 'leave') return 'Urlop z nadgodzin';
+  if (type === 'leave') return 'Odbiór nadgodzin';
   if (type === 'trip') return 'Delegacja';
   return 'Praca';
 }
