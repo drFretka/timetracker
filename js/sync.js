@@ -33,20 +33,30 @@ if (!SYNC_AVAILABLE) {
     return db.collection('users').doc(uid).collection('sync').doc('data');
   }
 
-  // Merges two entry arrays by id: an id only on one side is kept as-is; a
-  // colliding id with identical content collapses to one copy; a colliding
-  // id with different content keeps both (the incoming one gets a fresh id)
-  // — the same strategy already used by the JSON import merge.
+  // Merges two entry arrays. Matches primarily by CONTENT (every field
+  // except id) rather than id alone: two devices can independently end up
+  // with the same real-world entry under different auto-generated ids
+  // (e.g. the same historical import done separately on each device), and
+  // an id-only match would treat those as unrelated and keep concatenating
+  // full duplicate copies on every sync round. An id collision with
+  // different content still keeps both (the incoming one gets a fresh id).
+  function entryContentKey(e) {
+    return JSON.stringify(Object.keys(e).filter((k) => k !== 'id').sort().map((k) => [k, e[k]]));
+  }
+
   function mergeEntryArrays(local, remote) {
+    const seenContent = new Set(local.map(entryContentKey));
     const byId = new Map(local.map((e) => [e.id, e]));
     const merged = local.slice();
     for (const r of remote) {
+      if (seenContent.has(entryContentKey(r))) continue; // same entry already present, regardless of id
       const existing = byId.get(r.id);
       if (!existing) {
         merged.push(r);
-      } else if (JSON.stringify(existing) !== JSON.stringify(r)) {
+      } else {
         merged.push({ ...r, id: Date.now() + Math.floor(Math.random() * 1000) });
       }
+      seenContent.add(entryContentKey(r));
     }
     return merged;
   }
